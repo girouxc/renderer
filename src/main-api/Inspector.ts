@@ -9,7 +9,7 @@ import type {
   IAnimationController,
   AnimationControllerState,
 } from '../common/IAnimationController.js';
-import { isProductionEnvironment } from '../utils.js';
+import { ENABLE_INSPECTOR } from '../utils.js';
 import { CoreTextNode, type CoreTextNodeProps } from '../core/CoreTextNode.js';
 import type { Texture } from '../core/textures/Texture.js';
 import { TextureType } from '../core/textures/Texture.js';
@@ -289,7 +289,7 @@ export class Inspector {
   private animationStatsTimer: number | null = null;
 
   constructor(canvas: HTMLCanvasElement, settings: RendererMainSettings) {
-    if (isProductionEnvironment === true) return;
+    if (!ENABLE_INSPECTOR) return;
 
     if (!settings) {
       throw new Error('settings is required');

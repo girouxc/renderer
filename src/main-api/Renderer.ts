@@ -1,6 +1,6 @@
 import type { ExtractProps, TextureMap } from '../core/CoreTextureManager.js';
 import { EventEmitter } from '../common/EventEmitter.js';
-import { isProductionEnvironment } from '../utils.js';
+import { ENABLE_INSPECTOR } from '../utils.js';
 import { Stage, type StageOptions } from '../core/Stage.js';
 import { CoreNode, type CoreNodeProps } from '../core/CoreNode.js';
 import { type CoreTextNodeProps } from '../core/CoreTextNode.js';
@@ -620,7 +620,7 @@ export class RendererMain extends EventEmitter {
     }
 
     // Initialize inspector (if enabled)
-    if (inspector && isProductionEnvironment === false) {
+    if (inspector && ENABLE_INSPECTOR) {
       this.inspector = new inspector(canvas, settings as RendererMainSettings);
     }
   }
@@ -683,7 +683,7 @@ export class RendererMain extends EventEmitter {
   ): INode<ShNode> {
     const node = this.stage.createNode(props as Partial<CoreNodeProps>);
 
-    if (!isProductionEnvironment && this.inspector) {
+    if (ENABLE_INSPECTOR && this.inspector) {
       return this.inspector.createNode(node) as unknown as INode<ShNode>;
     }
 
@@ -707,7 +707,7 @@ export class RendererMain extends EventEmitter {
   createTextNode(props: Partial<ITextNodeProps>): ITextNode {
     const textNode = this.stage.createTextNode(props as CoreTextNodeProps);
 
-    if (!isProductionEnvironment && this.inspector) {
+    if (ENABLE_INSPECTOR && this.inspector) {
       return this.inspector.createTextNode(textNode) as unknown as ITextNode;
     }
 
@@ -724,7 +724,7 @@ export class RendererMain extends EventEmitter {
    * @returns
    */
   destroyNode(node: INode) {
-    if (!isProductionEnvironment && this.inspector) {
+    if (ENABLE_INSPECTOR && this.inspector) {
       this.inspector.destroyNode(node.id);
     }
 
@@ -888,7 +888,7 @@ export class RendererMain extends EventEmitter {
       stageOptions[key] = options[key]!;
     }
 
-    if (options.inspector !== undefined && !isProductionEnvironment) {
+    if (options.inspector !== undefined && ENABLE_INSPECTOR) {
       if (options.inspector === false) {
         this.inspector?.destroy();
         this.inspector = null;

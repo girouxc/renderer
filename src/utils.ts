@@ -77,6 +77,12 @@ export const CALCULATE_FPS =
     ? __calculateFps__
     : !isProductionEnvironment;
 
+declare const __enableInspector__: boolean;
+export const ENABLE_INSPECTOR =
+  typeof __enableInspector__ !== 'undefined'
+    ? __enableInspector__
+    : !isProductionEnvironment;
+
 // Works on WebOS 4!!
 declare const __dirtyQuadBuffer__: boolean;
 export const DIRTY_QUAD_BUFFER =
