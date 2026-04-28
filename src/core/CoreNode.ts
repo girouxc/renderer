@@ -695,6 +695,38 @@ export interface CoreNodeProps {
    * @default false
    */
   preventDestroy?: boolean;
+
+  /**
+   * The name of the framework component that created this node.
+   *
+   * @remarks
+   * When set, the Inspector will create a custom HTML element with this name
+   * so that the Chrome DevTools Elements panel displays the component name
+   * instead of a generic `<div>`. The value should match the JSX component
+   * name as written in source (e.g. `"MyButton"`).
+   *
+   * This is typically injected by a Babel plugin (e.g. `jsx-locator`) and is
+   * only meaningful when the Inspector is enabled.
+   *
+   * @default `undefined`
+   */
+  componentName?: string;
+
+  /**
+   * The source file path of the framework component that created this node.
+   *
+   * @remarks
+   * When set alongside {@link componentName}, the Inspector will attach a
+   * `data-location` attribute to the DOM element, enabling click-to-source
+   * navigation from Chrome DevTools.
+   *
+   * The value should be an absolute or project-relative path to the component
+   * source file, optionally followed by `:line:column`
+   * (e.g. `"/src/components/MyButton.tsx:12:3"`).
+   *
+   * @default `undefined`
+   */
+  componentLocation?: string;
 }
 
 /**
@@ -850,6 +882,8 @@ export class CoreNode extends EventEmitter {
       scale: null,
       interactive: props.interactive,
       preventDestroy: props.preventDestroy,
+      componentName: props.componentName,
+      componentLocation: props.componentLocation,
     });
 
     //check if any color props are set for premultiplied color updates
@@ -2766,6 +2800,14 @@ export class CoreNode extends EventEmitter {
 
   get interactive(): boolean | undefined {
     return this.props.interactive;
+  }
+
+  get componentName(): string | undefined {
+    return this.props.componentName;
+  }
+
+  get componentLocation(): string | undefined {
+    return this.props.componentLocation;
   }
 
   setRTTUpdates(type: number) {

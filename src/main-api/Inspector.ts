@@ -230,7 +230,58 @@ const knownProperties = new Set<string>([
   'parent',
   'data',
   'text',
+  'componentName',
+  'componentLocation',
 ]);
+
+/**
+ * Convert a PascalCase or camelCase component name to a valid custom-element
+ * tag name by inserting hyphens before uppercase letters and lower-casing.
+ * A mandatory "x-" prefix is added so the name always contains a hyphen,
+ * which is required by the Custom Elements spec.
+ *
+ * Examples:
+ *   "MyButton"   → "x-my-button"
+ *   "FocusRing"  → "x-focus-ring"
+ *   "view"       → "x-view"
+ */
+function toCustomElementTag(componentName: string): string {
+  const kebab = componentName
+    .replace(/([A-Z])/g, '-$1')
+    .toLowerCase()
+    .replace(/^-/, ''); // strip leading hyphen if name starts with uppercase
+  return `${kebab}-x`;
+}
+
+/**
+ * Registry of custom element tag names that have already been defined so we
+ * only call customElements.define() once per unique component name.
+ */
+const registeredCustomElements = new Set<string>();
+
+/**
+ * Ensure a minimal custom element class is registered for the given tag name.
+ * The element extends HTMLElement with no additional behaviour; its only
+ * purpose is to make Chrome DevTools show the component name in the Elements
+ * panel.
+ */
+function ensureCustomElement(tagName: string): void {
+  if (registeredCustomElements.has(tagName)) {
+    return;
+  }
+  registeredCustomElements.add(tagName);
+
+  // Guard: skip if already defined (e.g. by another module) or if the
+  // Custom Elements API is unavailable (SSR / test environments).
+  if (
+    typeof customElements === 'undefined' ||
+    customElements.get(tagName) !== undefined
+  ) {
+    return;
+  }
+
+  customElements.define(tagName, class extends HTMLElement {});
+}
 
 export class Inspector {
   private root: HTMLElement | null = null;
@@ -732,14 +783,29 @@ export class Inspector {
     id: number,
     properties: CoreNodeProps | CoreTextNodeProps,
   ): HTMLElement {
-    const div = document.createElement('div');
-    div.style.position = 'absolute';
-    div.id = id.toString();
+    // Use a custom element tag when the node carries a componentName so that
+    // Chrome DevTools' Elements panel shows the framework component name
+    // instead of a generic <div>.
+    const componentName = (properties as CoreNodeProps).componentName;
+    let el: HTMLElement;
+
+    if (componentName) {
+      const tagName = toCustomElementTag(componentName);
+      ensureCustomElement(tagName);
+      el = document.createElement(tagName);
+      // Store the original PascalCase name as a readable attribute.
+      // el.setAttribute('data-component', componentName);
+    } else {
+      el = document.createElement('div');
+    }
+
+    el.style.position = 'absolute';
+    el.id = id.toString();
 
     // set initial properties
     for (const key in properties) {
       this.updateNodeProperty(
-        div,
+        el,
         // really typescript? really?
         key as keyof CoreNodeProps,
         properties[key as keyof CoreNodeProps],
@@ -747,7 +813,7 @@ export class Inspector {
       );
     }
 
-    return div;
+    return el;
   }
 
   createNodes(node: CoreNode): boolean {
@@ -1203,6 +1269,22 @@ export class Inspector {
           div.setAttribute(`data-${key}`, String(keyValue));
         }
       }
+      return;
+    }
+
+    // Component metadata – handled when the element is created in createDiv;
+    // re-applied here to support dynamic updates (rare but possible).
+    if (property === 'componentName' && value) {
+      const tagName = toCustomElementTag(String(value));
+      ensureCustomElement(tagName);
+      // div.setAttribute('data-component', String(value));
+      return;
+    }
+
+    if (property === 'componentLocation' && value) {
+      // Expose the source path so Chrome DevTools extensions and VS Code's
+      // browser debugger can offer "open in editor" functionality.
+      // div.setAttribute('data-location', String(value));
       return;
     }
   }

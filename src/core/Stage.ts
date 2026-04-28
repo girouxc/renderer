@@ -979,6 +979,9 @@ export class Stage {
       data,
       imageType: props.imageType,
       interactive: props.interactive ?? false,
+      preventDestroy: props.preventDestroy,
+      componentName: props.componentName,
+      componentLocation: props.componentLocation,
     };
   }
 
