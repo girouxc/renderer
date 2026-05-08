@@ -130,7 +130,12 @@ const renderText = (props: CoreTextNodeProps): TextRenderInfo => {
 
   canvas.width = canvasW;
   canvas.height = canvasH;
-  context.fillStyle = 'white';
+  const color = props.color ?? 0xffffffff;
+  const r = (color >>> 24) & 0xff;
+  const g = (color >>> 16) & 0xff;
+  const b = (color >>> 8) & 0xff;
+  const a = color & 0xff;
+  context.fillStyle = `rgba(${r},${g},${b},${a / 255})`;
   context.font = font;
   context.textBaseline = 'hanging';
 

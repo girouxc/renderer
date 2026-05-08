@@ -6,7 +6,7 @@ import type {
   TextRenderInfo,
   SdfVertexCache,
 } from './text-rendering/TextRenderer.js';
-import { USE_RTT } from '../utils.js';
+import { USE_RTT, premultiplyColorABGR } from '../utils.js';
 import {
   CoreNode,
   CoreNodeRenderState,
@@ -300,8 +300,15 @@ export class CoreTextNode extends CoreNode implements CoreTextNodeProps {
         return;
     }
 
-    // Canvas renderer: use standard texture rendering via CoreNode
+    // Canvas renderer: color is baked into the texture to preserve
+    // native emoji colors. Use white tint with worldAlpha only.
     if (this._type === 'canvas') {
+      const white = premultiplyColorABGR(0xffffffff, this.worldAlpha);
+      this.premultipliedColorTl =
+        this.premultipliedColorTr =
+        this.premultipliedColorBl =
+        this.premultipliedColorBr =
+          white;
       super.renderQuads(renderer);
       return;
     }
@@ -553,6 +560,18 @@ export class CoreTextNode extends CoreNode implements CoreTextNodeProps {
   set offsetY(value: number) {
     if (this.textProps.offsetY !== value) {
       this.textProps.offsetY = value;
+      this._layoutGenerated = false;
+      this.setUpdateType(UpdateType.Local);
+    }
+  }
+
+  override get color(): number {
+    return this.props.color;
+  }
+
+  override set color(value: number) {
+    super.color = value;
+    if (this._type === 'canvas') {
       this._layoutGenerated = false;
       this.setUpdateType(UpdateType.Local);
     }
