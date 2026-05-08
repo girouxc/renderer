@@ -9,7 +9,7 @@ import { ImageTexture } from './textures/ImageTexture.js';
 import { Matrix3d } from './lib/Matrix3d.js';
 
 describe('set color()', () => {
-  const defaultProps: CoreNodeProps = {
+  const defaultProps = (overrides?: Partial<CoreNodeProps>): CoreNodeProps => ({
     alpha: 0,
     autosize: false,
     boundsMargin: null,
@@ -45,7 +45,8 @@ describe('set color()', () => {
     y: 0,
     zIndex: 0,
     preventDestroy: false,
-  };
+    ...overrides,
+  });
 
   const clippingRect = {
     x: 0,
@@ -66,7 +67,7 @@ describe('set color()', () => {
 
   describe('set color()', () => {
     it('should set all color subcomponents.', () => {
-      const node = new CoreNode(stage, defaultProps);
+      const node = new CoreNode(stage, defaultProps());
       node.colorBl = 0x99aabbff;
       node.colorBr = 0xaabbccff;
       node.colorTl = 0xbbcceeff;
@@ -87,7 +88,7 @@ describe('set color()', () => {
     });
 
     it('should set update type.', () => {
-      const node = new CoreNode(stage, defaultProps);
+      const node = new CoreNode(stage, defaultProps());
       node.updateType = 0;
       node.color = 0xffffffff;
 
@@ -99,17 +100,17 @@ describe('set color()', () => {
 
   describe('isRenderable checks', () => {
     it('should return false if node is not renderable', () => {
-      const node = new CoreNode(stage, defaultProps);
+      const node = new CoreNode(stage, defaultProps());
       expect(node.isRenderable).toBe(false);
     });
 
     it('visible node that is a color texture', () => {
-      const parent = new CoreNode(stage, defaultProps);
+      const parent = new CoreNode(stage, defaultProps());
       // Manually set parent properties that update() might read
       parent.globalTransform = Matrix3d.identity();
       parent.worldAlpha = 1;
 
-      const node = new CoreNode(stage, { ...defaultProps, parent });
+      const node = new CoreNode(stage, defaultProps({ parent }));
       node.alpha = 1;
       node.x = 0;
       node.y = 0;
@@ -122,11 +123,11 @@ describe('set color()', () => {
     });
 
     it('visible node that is a texture', () => {
-      const parent = new CoreNode(stage, defaultProps);
+      const parent = new CoreNode(stage, defaultProps());
       parent.globalTransform = Matrix3d.identity();
       parent.worldAlpha = 1;
 
-      const node = new CoreNode(stage, { ...defaultProps, parent });
+      const node = new CoreNode(stage, defaultProps({ parent }));
       node.alpha = 1;
       node.x = 0;
       node.y = 0;
@@ -148,11 +149,11 @@ describe('set color()', () => {
     });
 
     it('a node with a texture with alpha 0 should not be renderable', () => {
-      const parent = new CoreNode(stage, defaultProps);
+      const parent = new CoreNode(stage, defaultProps());
       parent.globalTransform = Matrix3d.identity();
       parent.worldAlpha = 1;
 
-      const node = new CoreNode(stage, { ...defaultProps, parent });
+      const node = new CoreNode(stage, defaultProps({ parent }));
       expect(node.isRenderable).toBe(false);
       node.alpha = 0;
       node.x = 0;
@@ -169,11 +170,11 @@ describe('set color()', () => {
     });
 
     it('a node with a texture that is OutOfBounds should not be renderable', () => {
-      const parent = new CoreNode(stage, defaultProps);
+      const parent = new CoreNode(stage, defaultProps());
       parent.globalTransform = Matrix3d.identity();
       parent.worldAlpha = 1;
 
-      const node = new CoreNode(stage, { ...defaultProps, parent });
+      const node = new CoreNode(stage, defaultProps({ parent }));
       node.alpha = 1;
       node.x = 300;
       node.y = 300;
@@ -188,11 +189,11 @@ describe('set color()', () => {
     });
 
     it('a node with a freed texture should not be renderable', () => {
-      const parent = new CoreNode(stage, defaultProps);
+      const parent = new CoreNode(stage, defaultProps());
       parent.globalTransform = Matrix3d.identity();
       parent.worldAlpha = 1;
 
-      const node = new CoreNode(stage, { ...defaultProps, parent });
+      const node = new CoreNode(stage, defaultProps({ parent }));
       node.alpha = 1;
       node.x = 0;
       node.y = 0;
@@ -207,11 +208,11 @@ describe('set color()', () => {
     });
 
     it('should emit renderable event when isRenderable status changes', () => {
-      const parent = new CoreNode(stage, defaultProps);
+      const parent = new CoreNode(stage, defaultProps());
       parent.globalTransform = Matrix3d.identity();
       parent.worldAlpha = 1;
 
-      const node = new CoreNode(stage, { ...defaultProps, parent });
+      const node = new CoreNode(stage, defaultProps({ parent }));
       const eventCallback = vi.fn();
 
       // Listen for the renderableChanged event
@@ -262,12 +263,12 @@ describe('set color()', () => {
 
   describe('autosize system', () => {
     it('should initialize with autosize disabled', () => {
-      const node = new CoreNode(stage, defaultProps);
+      const node = new CoreNode(stage, defaultProps());
       expect(node.autosize).toBe(false);
     });
 
     it('should enable texture autosize when texture is present', () => {
-      const node = new CoreNode(stage, defaultProps);
+      const node = new CoreNode(stage, defaultProps());
       const mockTexture = mock<ImageTexture>();
       mockTexture.state = 'loading';
 
@@ -279,8 +280,8 @@ describe('set color()', () => {
     });
 
     it('should enable children autosize when no texture but has children', () => {
-      const parent = new CoreNode(stage, defaultProps);
-      const child = new CoreNode(stage, defaultProps);
+      const parent = new CoreNode(stage, defaultProps());
+      const child = new CoreNode(stage, defaultProps());
 
       parent.autosize = true;
       child.parent = parent;
@@ -290,8 +291,8 @@ describe('set color()', () => {
     });
 
     it('should prioritize texture autosize over children autosize', () => {
-      const parent = new CoreNode(stage, defaultProps);
-      const child = new CoreNode(stage, defaultProps);
+      const parent = new CoreNode(stage, defaultProps());
+      const child = new CoreNode(stage, defaultProps());
       const mockTexture = mock<ImageTexture>();
       mockTexture.state = 'loading';
 
@@ -305,8 +306,8 @@ describe('set color()', () => {
     });
 
     it('should switch from children to texture autosize when texture is added', () => {
-      const parent = new CoreNode(stage, defaultProps);
-      const child = new CoreNode(stage, defaultProps);
+      const parent = new CoreNode(stage, defaultProps());
+      const child = new CoreNode(stage, defaultProps());
 
       child.parent = parent;
       parent.autosize = true;
@@ -321,8 +322,8 @@ describe('set color()', () => {
     });
 
     it('should switch from texture to children autosize when texture is removed', () => {
-      const parent = new CoreNode(stage, defaultProps);
-      const child = new CoreNode(stage, defaultProps);
+      const parent = new CoreNode(stage, defaultProps());
+      const child = new CoreNode(stage, defaultProps());
       const mockTexture = mock<ImageTexture>();
       mockTexture.state = 'loading';
 
@@ -337,8 +338,8 @@ describe('set color()', () => {
     });
 
     it('should cleanup autosize manager when disabled', () => {
-      const parent = new CoreNode(stage, defaultProps);
-      const child = new CoreNode(stage, defaultProps);
+      const parent = new CoreNode(stage, defaultProps());
+      const child = new CoreNode(stage, defaultProps());
 
       child.parent = parent;
       parent.autosize = true;
@@ -349,8 +350,8 @@ describe('set color()', () => {
     });
 
     it('should establish autosize chain when child is added to autosize parent', () => {
-      const parent = new CoreNode(stage, defaultProps);
-      const child = new CoreNode(stage, defaultProps);
+      const parent = new CoreNode(stage, defaultProps());
+      const child = new CoreNode(stage, defaultProps());
 
       // Enable autosize BEFORE adding child
       parent.autosize = true;
@@ -361,8 +362,8 @@ describe('set color()', () => {
     });
 
     it('should remove from autosize chain when child is removed', () => {
-      const parent = new CoreNode(stage, defaultProps);
-      const child = new CoreNode(stage, defaultProps);
+      const parent = new CoreNode(stage, defaultProps());
+      const child = new CoreNode(stage, defaultProps());
 
       // Enable autosize BEFORE adding child
       parent.autosize = true;
@@ -376,12 +377,12 @@ describe('set color()', () => {
 
   describe('isSimple optimization', () => {
     it('should be simple by default', () => {
-      const node = new CoreNode(stage, defaultProps);
+      const node = new CoreNode(stage, defaultProps());
       expect(node.isSimple).toBe(true);
     });
 
     it('should not be simple if rotated', () => {
-      const node = new CoreNode(stage, defaultProps);
+      const node = new CoreNode(stage, defaultProps());
       node.rotation = 0.1;
       expect(node.isSimple).toBe(false);
       node.rotation = 0;
@@ -389,7 +390,7 @@ describe('set color()', () => {
     });
 
     it('should not be simple if scaled', () => {
-      const node = new CoreNode(stage, defaultProps);
+      const node = new CoreNode(stage, defaultProps());
       node.scale = 1.1;
       expect(node.isSimple).toBe(false);
       node.scale = 1;
@@ -407,7 +408,7 @@ describe('set color()', () => {
     });
 
     it('should not be simple if mounted', () => {
-      const node = new CoreNode(stage, defaultProps);
+      const node = new CoreNode(stage, defaultProps());
       node.mount = 0.5;
       expect(node.isSimple).toBe(false);
       node.mount = 0;
@@ -425,7 +426,7 @@ describe('set color()', () => {
     });
 
     it('should not be simple if texture is contained', () => {
-      const node = new CoreNode(stage, defaultProps);
+      const node = new CoreNode(stage, defaultProps());
       const mockTexture = mock<ImageTexture>({
         state: 'loaded',
         dimensions: { w: 100, h: 100 },
@@ -442,9 +443,9 @@ describe('set color()', () => {
     });
 
     it('should update local transform correctly when simple', () => {
-      const parent = new CoreNode(stage, defaultProps);
+      const parent = new CoreNode(stage, defaultProps());
       parent.globalTransform = Matrix3d.identity();
-      const node = new CoreNode(stage, { ...defaultProps, parent });
+      const node = new CoreNode(stage, defaultProps({ parent }));
       node.x = 100;
       node.y = 50;
       node.props.w = 50;
@@ -459,9 +460,9 @@ describe('set color()', () => {
     });
 
     it('should update local transform correctly when not simple (rotation)', () => {
-      const parent = new CoreNode(stage, defaultProps);
+      const parent = new CoreNode(stage, defaultProps());
       parent.globalTransform = Matrix3d.identity();
-      const node = new CoreNode(stage, { ...defaultProps, parent });
+      const node = new CoreNode(stage, defaultProps({ parent }));
       node.x = 100;
       node.y = 50;
       node.props.w = 100; // use props.w directly to avoid trigger setters if exist (though setters exist)
@@ -482,10 +483,10 @@ describe('set color()', () => {
 
   describe('isSimple Global Transform', () => {
     it('should calculate global transform correctly when simple', () => {
-      const parent = new CoreNode(stage, defaultProps);
+      const parent = new CoreNode(stage, defaultProps());
       parent.globalTransform = Matrix3d.translate(10, 20);
 
-      const node = new CoreNode(stage, { ...defaultProps, parent });
+      const node = new CoreNode(stage, defaultProps({ parent }));
       node.x = 100;
       node.y = 50;
       // node is simple by default
@@ -501,10 +502,10 @@ describe('set color()', () => {
     });
 
     it('should calculate global transform correctly when not simple', () => {
-      const parent = new CoreNode(stage, defaultProps);
+      const parent = new CoreNode(stage, defaultProps());
       parent.globalTransform = Matrix3d.translate(10, 20);
 
-      const node = new CoreNode(stage, { ...defaultProps, parent });
+      const node = new CoreNode(stage, defaultProps({ parent }));
       node.x = 100;
       node.y = 50;
       node.w = 100;
