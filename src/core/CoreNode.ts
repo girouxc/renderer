@@ -838,53 +838,19 @@ export class CoreNode extends EventEmitter {
     let initialUpdateType =
       UpdateType.Local | UpdateType.RenderBounds | UpdateType.RenderState;
 
-    // Fast-path assign only known keys
-    const p = (this.props = {
-      x: props.x,
-      y: props.y,
-      w: props.w,
-      h: props.h,
-      alpha: props.alpha,
-      autosize: props.autosize,
-      clipping: props.clipping,
-      color: props.color,
-      colorTop: props.colorTop,
-      colorBottom: props.colorBottom,
-      colorLeft: props.colorLeft,
-      colorRight: props.colorRight,
-      colorTl: props.colorTl,
-      colorTr: props.colorTr,
-      colorBl: props.colorBl,
-      colorBr: props.colorBr,
-      scaleX: props.scaleX,
-      scaleY: props.scaleY,
-      rotation: props.rotation,
-      pivotX: props.pivotX,
-      pivotY: props.pivotY,
-      mountX: props.mountX,
-      mountY: props.mountY,
-      mount: props.mount,
-      pivot: props.pivot,
-      zIndex: props.zIndex,
-      textureOptions: props.textureOptions,
-      data: props.data,
-      imageType: props.imageType,
-      srcX: props.srcX,
-      srcY: props.srcY,
-      srcWidth: props.srcWidth,
-      srcHeight: props.srcHeight,
-      parent: props.parent,
-      texture: null,
-      shader: null,
-      src: null,
-      rtt: false,
-      boundsMargin: null,
-      scale: null,
-      interactive: props.interactive,
-      preventDestroy: props.preventDestroy,
-      componentName: props.componentName,
-      componentLocation: props.componentLocation,
-    });
+    // Use the incoming props object directly — resolveNodeDefaults already
+    // creates a fresh object with a consistent shape.  Save fields that are
+    // re-applied through setters, then null them on props so the setters
+    // detect the change.
+    const { texture, shader, src, rtt, boundsMargin, interactive, parent } =
+      props;
+    const p = (this.props = props);
+    p.texture = null;
+    p.shader = null;
+    p.src = null;
+    p.rtt = false;
+    p.boundsMargin = null;
+    p.scale = null;
 
     //check if any color props are set for premultiplied color updates
     if (
@@ -907,17 +873,17 @@ export class CoreNode extends EventEmitter {
       this.zIndex = p.zIndex;
     }
 
-    if (props.parent !== null) {
-      props.parent.addChild(this);
+    if (parent !== null) {
+      parent.addChild(this);
     }
 
-    // Assign props to instances
-    this.texture = props.texture;
-    this.shader = props.shader;
-    this.src = props.src;
-    this.rtt = props.rtt;
-    this.boundsMargin = props.boundsMargin;
-    this.interactive = props.interactive;
+    // Assign saved values through setters
+    this.texture = texture;
+    this.shader = shader;
+    this.src = src;
+    this.rtt = rtt;
+    this.boundsMargin = boundsMargin;
+    this.interactive = interactive;
 
     // Initialize autosize if enabled
     if (p.autosize === true) {
