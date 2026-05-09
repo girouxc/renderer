@@ -365,6 +365,14 @@ export class WebGlRenderer extends CoreRenderer {
       this.flushTextRenderOps();
     }
 
+    // With batching off, SDF ops live inside renderOps interleaved with quad
+    // ops. A non-text quad inserted here would otherwise still let the next
+    // text node extend the previous SDF op (same atlas/clipping), drawing
+    // those glyphs at the earlier position and getting overdrawn by this quad.
+    if (RENDER_TEXT_BATCHING === false) {
+      this.curSdfRenderOp = null;
+    }
+
     const reuse = this.reuseRenderOp(node);
 
     // During RTT rendering, always use sequential allocation and write data
