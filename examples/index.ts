@@ -432,7 +432,11 @@ async function runAutomation(
           },
           memMonitor: null,
         };
-        await automation(exampleSettings);
+        try {
+          await automation(exampleSettings);
+        } catch (err) {
+          console.error(`Automation for ${testName} threw:`, err);
+        }
         testRoot.parent = null;
         testRoot.destroy();
       }
