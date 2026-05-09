@@ -32,6 +32,10 @@ const init = (stage: Stage): void => {
 };
 
 const font: FontHandler = SdfFontHandler;
+const layoutCache = new Map<string, TextLayout>();
+
+const getLayoutCacheKey = (props: CoreTextNodeProps): string =>
+  `${props.fontFamily}-${props.fontSize}-${props.letterSpacing}-${props.lineHeight}-${props.maxHeight}-${props.maxWidth}-${props.textAlign}-${props.text}`;
 
 /**
  * SDF text renderer using MSDF/SDF fonts with WebGL
@@ -49,6 +53,18 @@ const renderText = (props: CoreTextNodeProps): TextRenderInfo => {
     };
   }
 
+  const cacheKey = getLayoutCacheKey(props);
+  let layout = layoutCache.get(cacheKey);
+  if (layout !== undefined) {
+    return {
+      remainingLines: 0,
+      hasRemainingText: false,
+      width: layout.width,
+      height: layout.height,
+      layout,
+    };
+  }
+
   // Get font cache for this font family
   const fontData = SdfFontHandler.getFontData(props.fontFamily);
   if (fontData === undefined) {
@@ -60,7 +76,8 @@ const renderText = (props: CoreTextNodeProps): TextRenderInfo => {
   }
 
   // Calculate text layout and generate glyph data for caching
-  const layout = generateTextLayout(props, fontData);
+  layout = generateTextLayout(props, fontData);
+  layoutCache.set(cacheKey, layout);
 
   // For SDF renderer, ImageData is null since we render via WebGL
   return {
@@ -68,7 +85,7 @@ const renderText = (props: CoreTextNodeProps): TextRenderInfo => {
     hasRemainingText: false,
     width: layout.width,
     height: layout.height,
-    layout, // Cache layout for addQuads
+    layout,
   };
 };
 
@@ -302,14 +319,10 @@ const generateTextLayout = (
 
       // Calculate glyph position and atlas coordinates (in design units)
       const glyphLayout: GlyphLayout = {
-        codepoint,
-        glyphId: glyph.id,
         x: currentX + glyph.xoffset,
         y: currentY + glyph.yoffset,
         width: glyph.width,
         height: glyph.height,
-        xOffset: glyph.xoffset,
-        yOffset: glyph.yoffset,
         atlasX: glyph.x * invAtlasWidth,
         atlasY: glyph.y * invAtlasHeight,
         atlasWidth: glyph.width * invAtlasWidth,

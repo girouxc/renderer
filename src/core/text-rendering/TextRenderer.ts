@@ -236,41 +236,10 @@ export interface TrProps extends TrFontProps {
  * Glyph layout information for WebGL rendering
  */
 export interface GlyphLayout {
-  /**
-   * Unicode codepoint
-   */
-  codepoint: number;
-  /**
-   * Glyph ID in the font atlas
-   */
-  glyphId: number;
-  /**
-   * X position relative to text origin
-   */
   x: number;
-  /**
-   * Y position relative to text origin
-   */
   y: number;
-  /**
-   * Width of glyph in font units
-   */
   width: number;
-  /**
-   * Height of glyph in font units
-   */
   height: number;
-  /**
-   * X offset for glyph positioning
-   */
-  xOffset: number;
-  /**
-   * Y offset for glyph positioning
-   */
-  yOffset: number;
-  /**
-   * Atlas texture coordinates (normalized 0-1)
-   */
   atlasX: number;
   atlasY: number;
   atlasWidth: number;
