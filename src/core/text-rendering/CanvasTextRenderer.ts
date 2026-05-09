@@ -77,6 +77,14 @@ const renderText = (props: CoreTextNodeProps): TextRenderInfo => {
   assertTruthy(canvas, 'Canvas is not initialized');
   assertTruthy(context, 'Canvas context is not available');
   assertTruthy(measureContext, 'Canvas measureContext is not available');
+
+  if (props.text.length === 0) {
+    return {
+      width: 0,
+      height: 0,
+    };
+  }
+
   // Extract already normalized properties
   const {
     text,

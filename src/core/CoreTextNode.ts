@@ -239,27 +239,23 @@ export class CoreTextNode extends CoreNode implements CoreTextNodeProps {
     // Handle Canvas renderer (uses ImageData)
     if (textRendererType === 'canvas') {
       if (result.imageData === undefined) {
-        this.emit('failed', {
-          type: 'text',
-          error: new Error(
-            'Canvas text rendering failed, no image data returned',
-          ),
-        } satisfies NodeTextFailedPayload);
-        return;
-      }
+        // Empty text returns no imageData — mark not renderable and continue
+        // to update dimensions (w=0, h=0) rather than emitting a failure.
+        this.setRenderable(false);
+      } else {
+        this.texture = this.stage.txManager.createTexture('ImageTexture', {
+          premultiplyAlpha: true,
+          src: result.imageData as ImageData,
+        });
+        // It isn't renderable until the texture is loaded we have to set it to false here to avoid it
+        // being detected as a renderable default color node in the next frame
+        // it will be corrected once the texture is loaded
+        this.setRenderable(false);
 
-      this.texture = this.stage.txManager.createTexture('ImageTexture', {
-        premultiplyAlpha: true,
-        src: result.imageData as ImageData,
-      });
-      // It isn't renderable until the texture is loaded we have to set it to false here to avoid it
-      // being detected as a renderable default color node in the next frame
-      // it will be corrected once the texture is loaded
-      this.setRenderable(false);
-
-      if (this.renderState > CoreNodeRenderState.OutOfBounds) {
-        // We do want the texture to load immediately
-        this.texture.setRenderableOwner(this._id, true);
+        if (this.renderState > CoreNodeRenderState.OutOfBounds) {
+          // We do want the texture to load immediately
+          this.texture.setRenderableOwner(this._id, true);
+        }
       }
     }
 
