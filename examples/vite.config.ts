@@ -65,6 +65,8 @@ export default defineConfig(({ command, mode, isSsrBuild }) => {
     define: {
       __DEV__: true,
       __enableAutosize__: process.env.VRT_AUTOSIZE === 'true',
+      __emitBoundsEvents__: true,
+      __RTT__: true,
     },
   };
 });
