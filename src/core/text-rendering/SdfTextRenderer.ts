@@ -216,13 +216,14 @@ const generateTextLayout = (
 ): TextLayout => {
   const fontSize = props.fontSize;
   const fontFamily = props.fontFamily;
-  const lineHeight = props.lineHeight;
   const metrics = SdfFontHandler.getFontMetrics(fontFamily, fontSize);
-  const verticalAlign = props.verticalAlign;
 
   const fontData = fontCache.data;
   const commonFontData = fontData.common;
   const designFontSize = fontData.info.size;
+  const designLineHeight = commonFontData.lineHeight;
+  const lineHeight =
+    props.lineHeight || (designLineHeight * fontSize) / designFontSize;
 
   const atlasWidth = commonFontData.scaleW;
   const atlasHeight = commonFontData.scaleH;
