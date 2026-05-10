@@ -878,13 +878,32 @@ export class CoreNode extends EventEmitter {
       parent.addChild(this);
     }
 
-    // Assign saved values through setters
-    this.texture = texture;
-    this.shader = shader;
-    this.src = src;
-    this.rtt = rtt;
-    this.boundsMargin = boundsMargin;
-    this.interactive = interactive;
+    // Assign saved values through setters only when they differ from defaults.
+    // In the common JSX path these are all unset, so each unconditional setter
+    // call would either short-circuit on equality or — for shader — fire a
+    // redundant setUpdateType traversal up the parent chain.
+    if (texture !== null) {
+      this.texture = texture;
+    }
+    if (shader === null || shader === this.stage.defShaderNode) {
+      // Default shader — bypass the setter; props.shader was reset to null
+      // above and just needs to point at the default.
+      p.shader = this.stage.defShaderNode;
+    } else {
+      this.shader = shader;
+    }
+    if (src !== null) {
+      this.src = src;
+    }
+    if (rtt !== false) {
+      this.rtt = rtt;
+    }
+    if (boundsMargin !== null) {
+      this.boundsMargin = boundsMargin;
+    }
+    if (interactive !== undefined) {
+      this.interactive = interactive;
+    }
 
     // Initialize autosize if enabled
     if (p.autosize === true) {
