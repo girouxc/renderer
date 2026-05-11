@@ -320,7 +320,6 @@ export class CoreTextureManager extends EventEmitter {
     textureType: Type,
     props: ExtractProps<TextureMap[Type]>,
   ): InstanceType<TextureMap[Type]> {
-    let texture: Texture | undefined;
     const TextureClass = this.txConstructors[textureType];
     if (!TextureClass) {
       throw new TextureError(
@@ -328,18 +327,24 @@ export class CoreTextureManager extends EventEmitter {
         `Texture type "${textureType}" is not registered`,
       );
     }
-    const resolvedProps = TextureClass.resolveDefaults(props as any);
-    const cacheKey = TextureClass.makeCacheKey(resolvedProps as any);
-    if (cacheKey && this.keyCache.has(cacheKey)) {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      texture = this.keyCache.get(cacheKey)!;
-    } else {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
-      texture = new TextureClass(this, resolvedProps as any);
 
-      if (cacheKey) {
-        this.initTextureToCache(texture, cacheKey);
+    // Cache key is computed from raw props (each Texture's makeCacheKey
+    // inlines its own defaults) so we can skip the resolveDefaults
+    // allocation on a cache hit.
+    const cacheKey = TextureClass.makeCacheKey(props as any);
+    if (cacheKey) {
+      const cached = this.keyCache.get(cacheKey);
+      if (cached) {
+        return cached as InstanceType<TextureMap[Type]>;
       }
+    }
+
+    const resolvedProps = TextureClass.resolveDefaults(props as any);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+    const texture = new TextureClass(this, resolvedProps as any);
+
+    if (cacheKey) {
+      this.initTextureToCache(texture, cacheKey);
     }
 
     return texture as InstanceType<TextureMap[Type]>;
@@ -475,28 +480,81 @@ export class CoreTextureManager extends EventEmitter {
     const platform = this.platform;
     const startTime = platform.getTimeStamp();
 
-    // Process uploads - await each upload to prevent GPU overload
+    // Decode / fetch ("getTextureData") is IO-bound and parallelisable across
+    // image workers, while GPU upload is effectively serial. Keep a small
+    // sliding window of in-flight data fetches so the next decode runs while
+    // we're uploading the current one.
+    const prefetchLimit = Math.max(1, this.numImageWorkers);
+    const pending: Array<{ texture: Texture; data: Promise<unknown> }> = [];
+
+    // Helper avoids TS narrowing `texture.state` permanently after the first
+    // discriminated check — the property is mutable and can transition across
+    // awaits, so we need to re-read it freshly each time.
+    const isDead = (texture: Texture): boolean =>
+      texture.state === 'failed' || texture.state === 'freed';
+
+    const fillPrefetch = () => {
+      while (
+        pending.length < prefetchLimit &&
+        this.uploadTextureQueue.size > 0
+      ) {
+        const [texture] = this.uploadTextureQueue;
+        if (!texture) break;
+        this.uploadTextureQueue.delete(texture);
+
+        if (isDead(texture)) {
+          continue;
+        }
+
+        // Swallow the rejection here so an early failure doesn't surface as
+        // an unhandled promise rejection while it sits in the prefetch
+        // window; we re-check state after awaiting.
+        const data =
+          texture.textureData === null
+            ? texture.getTextureData().catch((err) => {
+                console.error('Failed to fetch texture data:', err);
+                return null;
+              })
+            : Promise.resolve(texture.textureData);
+
+        pending.push({ texture, data });
+      }
+    };
+
+    fillPrefetch();
+
     while (
-      this.uploadTextureQueue.size > 0 &&
+      pending.length > 0 &&
       platform.getTimeStamp() - startTime < maxProcessingTime
     ) {
-      const [texture] = this.uploadTextureQueue;
-      if (!texture) break;
-      this.uploadTextureQueue.delete(texture);
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      const next = pending.shift()!;
+      // Top up the prefetch window before awaiting — the next decode starts
+      // now and overlaps with this upload.
+      fillPrefetch();
 
-      // Skip textures that were freed or failed between enqueue and now.
-      if (texture.state === 'failed' || texture.state === 'freed') {
+      if (isDead(next.texture)) {
         continue;
       }
 
       try {
-        if (texture.textureData === null) {
-          await texture.getTextureData();
+        await next.data;
+        if (isDead(next.texture)) {
+          continue;
         }
-        await this.uploadTexture(texture);
+        await this.uploadTexture(next.texture);
       } catch (error) {
         console.error('Failed to upload texture:', error);
         // Continue with next texture instead of stopping entire queue
+      }
+    }
+
+    // Time ran out before we got to these. Put them back so we don't lose
+    // them — their getTextureData() is already in flight and will populate
+    // `textureData` for the next tick.
+    for (const { texture } of pending) {
+      if (!isDead(texture)) {
+        this.uploadTextureQueue.add(texture);
       }
     }
   }

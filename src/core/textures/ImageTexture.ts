@@ -364,11 +364,15 @@ export class ImageTexture extends Texture {
       return false;
     }
 
-    let cacheKey = `ImageTexture,${key},${props.premultiplyAlpha ?? 'true'},${
-      props.maxRetryCount
-    }`;
+    // Inline default values so the key is stable whether or not the caller
+    // has run them through resolveDefaults first. Must mirror the defaults
+    // in resolveDefaults below.
+    const premultiplyAlpha = props.premultiplyAlpha ?? true;
+    const maxRetryCount = props.maxRetryCount ?? 5;
 
-    if (props.sh !== null && props.sw !== null) {
+    let cacheKey = `ImageTexture,${key},${premultiplyAlpha},${maxRetryCount}`;
+
+    if (props.sh != null && props.sw != null) {
       cacheKey += `,${props.sx ?? ''},${props.sy ?? ''},${props.sw || ''},${
         props.sh || ''
       }`;

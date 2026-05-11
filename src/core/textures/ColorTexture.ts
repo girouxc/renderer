@@ -70,7 +70,9 @@ export class ColorTexture extends Texture {
   }
 
   static override makeCacheKey(props: ColorTextureProps): string {
-    return `ColorTexture,${props.color}`;
+    // Mirror the default from resolveDefaults so the key is stable whether
+    // or not the caller has run defaults first.
+    return `ColorTexture,${props.color || 0xffffffff}`;
   }
 
   static override resolveDefaults(
