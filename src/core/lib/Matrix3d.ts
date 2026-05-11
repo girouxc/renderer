@@ -124,11 +124,24 @@ export class Matrix3d {
   }
 
   public static rotate(angle: number, out?: Matrix3d): Matrix3d {
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    if (!out) {
+    if (out === undefined) {
       out = new Matrix3d();
     }
+    if (angle === 0) {
+      // Skip Math.cos(0) / Math.sin(0) — neither V8 nor JSC constant-folds
+      // these calls. Identity rotation is the common case when callers
+      // combine rotate().scale() and only the scale is non-default.
+      out.ta = 1;
+      out.tb = 0;
+      out.tx = 0;
+      out.tc = 0;
+      out.td = 1;
+      out.ty = 0;
+      out.mutation = true;
+      return out;
+    }
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
     out.ta = cos;
     out.tb = -sin;
     out.tx = 0;

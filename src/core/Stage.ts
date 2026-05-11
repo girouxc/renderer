@@ -359,9 +359,10 @@ export class Stage {
 
     this.root = rootNode;
 
-    // Initialize root node properties
+    // Initialize root node properties. Copy in place into the eagerly-allocated
+    // matrices so the hidden class for these fields stays stable.
     rootNode.updateLocalTransform();
-    rootNode.globalTransform = Matrix3d.copy(rootNode.localTransform!);
+    Matrix3d.copy(rootNode.localTransform!, rootNode.globalTransform);
     rootNode.sceneGlobalTransform = Matrix3d.copy(rootNode.localTransform!);
     rootNode.calculateRenderCoords();
     rootNode.updateBoundingRect();

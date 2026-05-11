@@ -37,3 +37,36 @@ describe('Matrix3d.setTranslate', () => {
     expect(m.ty).toBe(0);
   });
 });
+
+describe('Matrix3d.rotate(0) fast path', () => {
+  it('produces an identity matrix for angle=0', () => {
+    const m = Matrix3d.rotate(0);
+    expect(m.ta).toBe(1);
+    expect(m.tb).toBe(0);
+    expect(m.tc).toBe(0);
+    expect(m.td).toBe(1);
+    expect(m.tx).toBe(0);
+    expect(m.ty).toBe(0);
+  });
+
+  it('resets a pre-populated out matrix to identity on angle=0', () => {
+    const m = Matrix3d.rotate(Math.PI / 4);
+    // Now reuse `m` with angle=0; should overwrite to identity.
+    Matrix3d.rotate(0, m);
+    expect(m.ta).toBe(1);
+    expect(m.tb).toBe(0);
+    expect(m.tc).toBe(0);
+    expect(m.td).toBe(1);
+    expect(m.tx).toBe(0);
+    expect(m.ty).toBe(0);
+  });
+
+  it('still produces a real rotation when angle != 0', () => {
+    const m = Matrix3d.rotate(Math.PI / 2);
+    // cos(pi/2) ~ 0, sin(pi/2) = 1
+    expect(Math.abs(m.ta)).toBeLessThan(1e-10);
+    expect(m.tb).toBeCloseTo(-1, 10);
+    expect(m.tc).toBeCloseTo(1, 10);
+    expect(Math.abs(m.td)).toBeLessThan(1e-10);
+  });
+});

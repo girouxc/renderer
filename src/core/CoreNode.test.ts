@@ -763,4 +763,143 @@ describe('set color()', () => {
       expect(rb.y2).toBe(120);
     });
   });
+
+  describe('updateLocalTransform scale-only fast path', () => {
+    it('produces correct ta/td without touching tb/tc for scale-only nodes', () => {
+      const parent = new CoreNode(stage, defaultProps());
+      parent.globalTransform = Matrix3d.identity();
+      const node = new CoreNode(stage, defaultProps({ parent }));
+      node.x = 10;
+      node.y = 20;
+      node.props.w = 100;
+      node.props.h = 100;
+      node.scaleX = 2;
+      node.scaleY = 3;
+
+      node.update(0, clippingRect);
+
+      const lt = node.localTransform!;
+      expect(lt.ta).toBe(2);
+      expect(lt.tb).toBe(0);
+      expect(lt.tc).toBe(0);
+      expect(lt.td).toBe(3);
+      // No pivot configured -> translation is just (x - mountTranslate)
+      expect(lt.tx).toBe(10);
+      expect(lt.ty).toBe(20);
+    });
+
+    it('applies pivot correctly under scale (no rotation)', () => {
+      const parent = new CoreNode(stage, defaultProps());
+      parent.globalTransform = Matrix3d.identity();
+      const node = new CoreNode(stage, defaultProps({ parent }));
+      node.props.w = 100;
+      node.props.h = 100;
+      node.x = 0;
+      node.y = 0;
+      node.pivot = 0.5;
+      node.scaleX = 2;
+      node.scaleY = 2;
+
+      node.update(0, clippingRect);
+
+      // Algebraically: pivot scaling around the center.
+      //   tx = x - mountX*w + pivotX*w*(1 - sx)
+      //      = 0 - 0       + 50*(1-2) = -50
+      //   ty similarly = -50
+      const lt = node.localTransform!;
+      expect(lt.ta).toBe(2);
+      expect(lt.tb).toBe(0);
+      expect(lt.tc).toBe(0);
+      expect(lt.td).toBe(2);
+      expect(lt.tx).toBe(-50);
+      expect(lt.ty).toBe(-50);
+    });
+  });
+
+  describe('eagerly-allocated transforms (Fix 6)', () => {
+    it('allocates localTransform and globalTransform on construction', () => {
+      const node = new CoreNode(stage, defaultProps());
+      expect(node.localTransform).toBeInstanceOf(Matrix3d);
+      expect(node.globalTransform).toBeInstanceOf(Matrix3d);
+    });
+
+    it('initial matrices are in identity-shape', () => {
+      const node = new CoreNode(stage, defaultProps());
+      const lt = node.localTransform!;
+      const gt = node.globalTransform!;
+      expect(lt.ta).toBe(1);
+      expect(lt.tb).toBe(0);
+      expect(lt.tc).toBe(0);
+      expect(lt.td).toBe(1);
+      expect(gt.ta).toBe(1);
+      expect(gt.tb).toBe(0);
+      expect(gt.tc).toBe(0);
+      expect(gt.td).toBe(1);
+    });
+
+    it('reuses the same globalTransform instance across updates', () => {
+      const parent = new CoreNode(stage, defaultProps());
+      parent.globalTransform = Matrix3d.translate(0, 0);
+      parent._globalIsTranslate = true;
+      const node = new CoreNode(stage, defaultProps({ parent }));
+      const gtBefore = node.globalTransform!;
+
+      node.x = 10;
+      node.y = 20;
+      node.update(0, clippingRect);
+      expect(node.globalTransform).toBe(gtBefore);
+
+      node.x = 100;
+      node.update(1, clippingRect);
+      expect(node.globalTransform).toBe(gtBefore);
+
+      // And after going into non-simple territory the same instance is still
+      // mutated in place rather than reallocated.
+      node.props.w = 100;
+      node.props.h = 100;
+      node.pivot = 0.5;
+      node.rotation = Math.PI / 2;
+      node.update(2, clippingRect);
+      expect(node.globalTransform).toBe(gtBefore);
+    });
+
+    it('_localIsTranslate defaults to true so the first update can take the fast path', () => {
+      const node = new CoreNode(stage, defaultProps());
+      expect(node._localIsTranslate).toBe(true);
+    });
+  });
+
+  describe('cached _hasContainResize (Fix 4)', () => {
+    it('starts as false on a fresh node', () => {
+      const node = new CoreNode(stage, defaultProps());
+      expect(node._hasContainResize).toBe(false);
+    });
+
+    it('flips to true when both texture and contain resizeMode are set', () => {
+      const node = new CoreNode(stage, defaultProps());
+      const tex = mock<ImageTexture>({ state: 'loaded' });
+      node.texture = tex;
+      expect(node._hasContainResize).toBe(false);
+
+      node.textureOptions = { resizeMode: { type: 'contain' } };
+      expect(node._hasContainResize).toBe(true);
+    });
+
+    it('flips back to false when texture is cleared or resizeMode changes', () => {
+      const node = new CoreNode(stage, defaultProps());
+      const tex = mock<ImageTexture>({ state: 'loaded' });
+      node.texture = tex;
+      node.textureOptions = { resizeMode: { type: 'contain' } };
+      expect(node._hasContainResize).toBe(true);
+
+      node.textureOptions = { resizeMode: { type: 'cover' } };
+      expect(node._hasContainResize).toBe(false);
+
+      node.textureOptions = { resizeMode: { type: 'contain' } };
+      expect(node._hasContainResize).toBe(true);
+
+      node.texture = null;
+      expect(node._hasContainResize).toBe(false);
+    });
+  });
 });
