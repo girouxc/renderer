@@ -761,10 +761,15 @@ export class CoreNode extends EventEmitter {
   protected _id: number = getNewId();
   readonly props: CoreNodeProps;
   public readonly isCoreNode = true as const;
+  /**
+   * Lazily allocated on first `animateProp` call. Animations are rare across
+   * the scene graph, so deferring the object literal avoids per-node GC
+   * pressure during construction.
+   */
   private _animations: Record<
     string,
     { controller: AnimationConfig; settings: Partial<AnimationSettings> }
-  > = {};
+  > | null = null;
 
   // WebGL Render Op State
   public renderOpBufferIdx: number = 0;
@@ -2936,27 +2941,32 @@ export class CoreNode extends EventEmitter {
     value: number,
     settings: Partial<AnimationSettings>,
   ): IAnimationController {
-    const existing = this._animations[name];
+    let animations = this._animations;
+    if (animations !== null) {
+      const existing = animations[name];
 
-    if (existing && existing.settings === settings) {
-      const controller = existing.controller;
-      const values = controller.props ? controller.props[name] : null;
+      if (existing && existing.settings === settings) {
+        const controller = existing.controller;
+        const values = controller.props ? controller.props[name] : null;
 
-      if (values) {
-        values.start = (this as any)[name] ?? 0;
-        values.target = value;
-        controller.progress = 0;
+        if (values) {
+          values.start = (this as any)[name] ?? 0;
+          values.target = value;
+          controller.progress = 0;
 
-        if (settings.adaptiveDuration === true) {
-          const now = performance.now();
-          const elapsed = now - controller.lastRunTime;
-          controller.lastRunTime = now;
-          const duration = settings.duration ?? controller.duration;
-          controller.duration = elapsed < duration ? elapsed : duration;
+          if (settings.adaptiveDuration === true) {
+            const now = performance.now();
+            const elapsed = now - controller.lastRunTime;
+            controller.lastRunTime = now;
+            const duration = settings.duration ?? controller.duration;
+            controller.duration = elapsed < duration ? elapsed : duration;
+          }
+
+          return controller.start();
         }
-
-        return controller.start();
       }
+    } else {
+      animations = this._animations = {};
     }
 
     const animationProps: Partial<CoreNodeAnimateProps> = { [name]: value };
@@ -2966,12 +2976,16 @@ export class CoreNode extends EventEmitter {
       animationProps,
       settings,
     );
-    this._animations[name] = { controller, settings };
+    animations[name] = { controller, settings };
     return controller.start();
   }
 
   animateToTarget(prop: string): number | undefined {
-    const animation = this._animations[prop];
+    const animations = this._animations;
+    if (animations === null) {
+      return undefined;
+    }
+    const animation = animations[prop];
     if (!animation) {
       return undefined;
     }
