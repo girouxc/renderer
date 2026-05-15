@@ -259,14 +259,14 @@ export const canRenderFont = (trProps: TrProps): boolean => {
  * @param {string} options.atlasUrl - PNG atlas texture URL
  * @param {FontMetrics} options.metrics - Optional font metrics
  */
-export const loadFont = async (
+export const loadFont = (
   stage: Stage,
   options: FontLoadOptions,
 ): Promise<void> => {
   const { fontFamily, atlasUrl, atlasDataUrl, metrics } = options;
   // Early return if already loaded
   if (fontCache.get(fontFamily) !== undefined) {
-    return;
+    return Promise.resolve();
   }
 
   // Early return if already loading
@@ -276,8 +276,8 @@ export const loadFont = async (
   }
 
   if (atlasDataUrl === undefined) {
-    throw new Error(
-      `Atlas data URL must be provided for SDF font: ${fontFamily}`,
+    return Promise.reject(
+      new Error(`Atlas data URL must be provided for SDF font: ${fontFamily}`),
     );
   }
 

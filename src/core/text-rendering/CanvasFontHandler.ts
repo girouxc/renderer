@@ -65,7 +65,7 @@ const processFontData = (
 /**
  * Load a font by providing fontFamily, fontUrl, and optional metrics
  */
-export const loadFont = async (
+export const loadFont = (
   stage: Stage,
   options: FontLoadOptions,
 ): Promise<void> => {
@@ -73,7 +73,7 @@ export const loadFont = async (
 
   // If already loaded, return immediately
   if (fontCache.has(fontFamily) === true) {
-    return;
+    return Promise.resolve();
   }
 
   const existingPromise = fontLoadPromises.get(fontFamily);

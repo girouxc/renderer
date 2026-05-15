@@ -1067,7 +1067,7 @@ export class Stage {
    * @param options - Font loading options specific to the renderer type
    * @returns Promise that resolves when the font is loaded
    */
-  async loadFont(
+  loadFont(
     rendererType: TextRenderers,
     options: FontLoadOptions,
   ): Promise<void> {
@@ -1075,10 +1075,12 @@ export class Stage {
     const fontHandler = this.fontHandlers[rendererTypeKey];
 
     if (!fontHandler) {
-      throw new Error(
-        `Font handler for renderer type '${rendererTypeKey}' not found. Available types: ${Object.keys(
-          this.fontHandlers,
-        ).join(', ')}`,
+      return Promise.reject(
+        new Error(
+          `Font handler for renderer type '${rendererTypeKey}' not found. Available types: ${Object.keys(
+            this.fontHandlers,
+          ).join(', ')}`,
+        ),
       );
     }
 
