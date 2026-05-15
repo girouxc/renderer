@@ -117,7 +117,7 @@ export const getFontFamilies = (): FontFamilyMap => {
  */
 export const init = (
   c: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-  mc: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  mc?: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
 ): void => {
   if (initialized === true) {
     return;
@@ -130,7 +130,7 @@ export const init = (
   }
 
   context = c;
-  measureContext = mc;
+  measureContext = mc ?? c;
 
   // Register the default 'sans-serif' font face
   const defaultMetrics: FontMetrics = {
