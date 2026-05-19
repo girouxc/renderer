@@ -42,12 +42,10 @@ export const Border: WebGlShaderType<BorderProps> = {
     varying vec2 v_outerBorderUv;
     varying vec2 v_innerBorderUv;
     varying vec2 v_halfDimensions;
-    varying float v_edgeWidth;
 
     void main() {
       vec2 screenSpace = vec2(2.0 / u_resolution.x, -2.0 / u_resolution.y);
       vec2 edge = clamp(a_nodeCoords * 2.0 - vec2(1.0), -1.0, 1.0);
-      v_edgeWidth = 1.0 / u_pixelRatio;
 
       float borderTop = u_borderWidth.x;
       float borderRight = u_borderWidth.y;
@@ -120,7 +118,6 @@ export const Border: WebGlShaderType<BorderProps> = {
     varying vec2 v_outerBorderUv;
     varying vec2 v_innerBorderUv;
     varying vec2 v_halfDimensions;
-    varying float v_edgeWidth;
 
     float box(vec2 p, vec2 s) {
       vec2 q = abs(p) - s;
@@ -131,24 +128,25 @@ export const Border: WebGlShaderType<BorderProps> = {
       vec4 color = texture2D(u_texture, v_textureCoords) * v_color;
       vec4 resultColor = vec4(0.0);
       vec2 boxUv = v_nodeCoords.xy * u_dimensions - v_halfDimensions;
+      float edgeWidth = 1.0 / u_pixelRatio;
 
-      float outerDist = box(boxUv + v_outerBorderUv, v_outerSize - v_edgeWidth);
-      float innerDist = box(boxUv + v_innerBorderUv, v_innerSize - v_edgeWidth);
+      float outerDist = box(boxUv + v_outerBorderUv, v_outerSize - edgeWidth);
+      float innerDist = box(boxUv + v_innerBorderUv, v_innerSize - edgeWidth);
 
       if(u_borderGap == 0.0) {
-        float outerAlpha = 1.0 - smoothstep(-0.5 * v_edgeWidth, 0.5 * v_edgeWidth, outerDist);
-        float innerAlpha = 1.0 - smoothstep(-0.5 * v_edgeWidth, 0.5 * v_edgeWidth, innerDist);
+        float outerAlpha = 1.0 - smoothstep(-0.5 * edgeWidth, 0.5 * edgeWidth, outerDist);
+        float innerAlpha = 1.0 - smoothstep(-0.5 * edgeWidth, 0.5 * edgeWidth, innerDist);
         resultColor = mix(resultColor, u_borderColor, outerAlpha * u_borderColor.a);
         resultColor = mix(resultColor, color, innerAlpha);
         gl_FragColor = resultColor * u_alpha;
         return;
       }
 
-      float nodeDist = box(boxUv, v_halfDimensions - v_edgeWidth);
-      float nodeAlpha = 1.0 - smoothstep(-0.5 * v_edgeWidth, 0.5 * v_edgeWidth, nodeDist);
+      float nodeDist = box(boxUv, v_halfDimensions - edgeWidth);
+      float nodeAlpha = 1.0 - smoothstep(-0.5 * edgeWidth, 0.5 * edgeWidth, nodeDist);
 
       float borderDist = max(-innerDist, outerDist);
-      float borderAlpha = 1.0 - smoothstep(-0.5 * v_edgeWidth, 0.5 * v_edgeWidth, borderDist);
+      float borderAlpha = 1.0 - smoothstep(-0.5 * edgeWidth, 0.5 * edgeWidth, borderDist);
       resultColor = mix(resultColor, color, nodeAlpha);
       resultColor = mix(resultColor, u_borderColor, borderAlpha * u_borderColor.a);
 
