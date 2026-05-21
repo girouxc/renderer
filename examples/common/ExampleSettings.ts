@@ -19,8 +19,8 @@ export interface SnapshotOptions {
   clip?: {
     x: number;
     y: number;
-    w: number;
-    h: number;
+    width: number;
+    height: number;
   };
 }
 

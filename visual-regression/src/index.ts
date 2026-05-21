@@ -280,20 +280,13 @@ async function runTest(browserType: 'chromium') {
     async (test: string, options: SnapshotOptions) => {
       snapshotsTested++;
 
-      // Ensure clip dimensions are integers
+      // Ensure clip dimensions are integers (matches Playwright's clip shape
+      // exactly — caller is expected to send {x, y, width, height}).
       if (options.clip) {
-        for (const key of ['x', 'y', 'w', 'h']) {
-          // remap 'w' and 'h' to 'width' and 'height'
-          if (key === 'w' || key === 'h') {
-            options.clip[key === 'w' ? 'width' : 'height'] = Math.round(
-              options.clip[key as keyof typeof options.clip],
-            );
-          } else {
-            options.clip[key as keyof typeof options.clip] = Math.round(
-              options.clip[key as keyof typeof options.clip],
-            );
-          }
-        }
+        options.clip.x = Math.round(options.clip.x);
+        options.clip.y = Math.round(options.clip.y);
+        options.clip.width = Math.round(options.clip.width);
+        options.clip.height = Math.round(options.clip.height);
       }
 
       const subtestName = options.name ? `${test}_${options.name}` : test;
@@ -303,39 +296,54 @@ async function runTest(browserType: 'chromium') {
         `${subtestName}-${snapshotIndex}${postfix ? `-${postfix}` : ''}.png`;
       const snapshotPath = path.join(snapshotSubDir, makeFilename());
 
-      if (argv.capture) {
-        // Handle snapshot capturing
-        const captureResponse = await saveSnapshot(
+      // Wrap the capture/compare so an unexpected throw (e.g. Playwright
+      // rejecting a malformed clip) is counted as a failure instead of
+      // silently leaving the counters at zero. Pre-fix, exceptions here
+      // bypassed both snapshotsPassed and snapshotsFailed, so a runner full
+      // of thrown comparisons exited with `snapshotsFailed === 0` and CI
+      // reported success even though nothing actually ran.
+      try {
+        if (argv.capture) {
+          const captureResponse = await saveSnapshot(
+            page,
+            snapshotPath,
+            options,
+            subtestName,
+            snapshotIndex,
+            argv.overwrite,
+          );
+          if (captureResponse === false) {
+            snapshotsSkipped++;
+            return;
+          }
+
+          if (argv.overwrite) {
+            snapshotsPassed++;
+            return;
+          }
+        }
+
+        const resp = await compareSnapshot(
           page,
           snapshotPath,
           options,
           subtestName,
           snapshotIndex,
-          argv.overwrite,
         );
-        if (captureResponse === false) {
-          snapshotsSkipped++;
-          return;
-        }
-
-        if (argv.overwrite) {
+        if (resp) {
           snapshotsPassed++;
-          return;
+        } else {
+          snapshotsFailed++;
         }
-      }
-
-      // Handle snapshot comparison
-      const resp = await compareSnapshot(
-        page,
-        snapshotPath,
-        options,
-        subtestName,
-        snapshotIndex,
-      );
-      if (resp) {
-        snapshotsPassed++;
-      } else {
+      } catch (err) {
         snapshotsFailed++;
+        console.log(
+          chalk.red.bold(
+            `FAILED! (${subtestName}-${snapshotIndex} threw: ${
+              err instanceof Error ? err.message : String(err)
+            })`,
+          ),
+        );
       }
     },
   );

@@ -9,7 +9,9 @@ import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
 
 /**
- * Keep in sync with `examples/common/ExampleSettings.ts`
+ * Keep in sync with `examples/common/ExampleSettings.ts`.
+ * `width`/`height` (not `w`/`h`) so the object can be handed directly to
+ * Playwright's `page.screenshot({ clip })`, which expects this exact shape.
  */
 export interface SnapshotOptions {
   name?: string;
@@ -93,9 +95,7 @@ export async function compareSnapshot(
   }
 
   const expectedPng = await fs.promises.readFile(snapshotPath);
-  const width = options.clip?.width || (1080 as number);
-  const height = options.clip?.height || (1920 as number);
-  const result = compareBuffers(actualPng, expectedPng, width, height);
+  const result = compareBuffers(actualPng, expectedPng);
 
   if (result.doesMatch) {
     console.log(chalk.green.bold('PASS!'));
@@ -168,10 +168,7 @@ export async function saveFailedSnapshot(
 export function compareBuffers(
   actualImageBuffer: Buffer,
   expectedImageBuffer: Buffer,
-  width: number,
-  height: number,
 ): CompareResult {
-  const diff = new PNG({ width: width as number, height: height as number });
   const actualImage = PNG.sync.read(actualImageBuffer);
   const expectedImage = PNG.sync.read(expectedImageBuffer);
 
@@ -182,25 +179,31 @@ export function compareBuffers(
     return {
       doesMatch: false,
       diffImageBuffer: undefined,
-      reason: 'Image dimensions do not match',
+      reason: `Image dimensions do not match (actual ${actualImage.width}x${actualImage.height}, expected ${expectedImage.width}x${expectedImage.height})`,
     };
   }
 
+  const width = actualImage.width;
+  const height = actualImage.height;
+  const diff = new PNG({ width, height });
+
+  // pixelmatch threshold is normalized YIQ color distance (0..1). 0.1 is the
+  // library default and the recommended value for catching meaningful UI
+  // changes while tolerating sub-pixel AA jitter. The previous 0.8 was so
+  // permissive that missing text on a solid background still passed.
   const count = pixelmatch(
     actualImage.data,
     expectedImage.data,
-
     diff.data,
     width,
     height,
-    { threshold: 0.8 }, // Adjust threshold for sensitivity
+    { threshold: 0.1 },
   );
 
   const doesMatch = count === 0;
 
   return {
     doesMatch,
-
     diffImageBuffer: doesMatch ? undefined : diff,
     reason: doesMatch ? undefined : `${count} pixels differ`,
   };

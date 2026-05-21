@@ -404,8 +404,8 @@ async function runAutomation(
             const clipRect = options?.clip || {
               x: testRoot.x,
               y: testRoot.y,
-              w: testRoot.w,
-              h: testRoot.h,
+              width: testRoot.w,
+              height: testRoot.h,
             };
 
             const adjustedOptions = {
@@ -413,8 +413,8 @@ async function runAutomation(
               clip: {
                 x: Math.round(clipRect.x * logicalPixelRatio),
                 y: Math.round(clipRect.y * logicalPixelRatio),
-                w: Math.round(clipRect.w * logicalPixelRatio),
-                h: Math.round(clipRect.h * logicalPixelRatio),
+                width: Math.round(clipRect.width * logicalPixelRatio),
+                height: Math.round(clipRect.height * logicalPixelRatio),
               },
             };
 
