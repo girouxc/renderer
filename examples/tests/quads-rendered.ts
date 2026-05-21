@@ -35,7 +35,7 @@ export default async function test({
     text: 'Number of Quads Rendered: ',
   });
 
-  renderer.on('quadsUpdate', (target, payload) => {
+  renderer.on('renderUpdate', (target, payload) => {
     quadsNode.text = `Number of Quads Rendered: ${payload.quads}`;
   });
 
