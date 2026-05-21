@@ -1,10 +1,25 @@
-# SolidTV Renderer - Agent Development Instructions
+# CLAUDE.md
 
-**Target**: High-performance JavaScript rendering engine for constrained embedded browser environments
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+**Target**: High-performance JavaScript rendering engine for constrained embedded browser environments (Chrome 38+).
+
+## Load-Bearing Invariants
+
+- **Dual backend**: WebGL and Canvas2D are first-class. When adding a rendering feature, implement both paths or explicitly document the gap, and add a `shader-*` (or equivalent) example test for the visual regression suite.
+- **GL state goes through [WebGlContextWrapper](src/core/lib/WebGlContextWrapper.ts)**: it is the only place that should touch the raw GL context. Bypassing it breaks batching invariants.
+- **Language floor is Chrome 38**: anything Babel can't transpile is off the table. Validate with `pnpm start:prod` before claiming a feature works on embedded targets. See [BROWSERS.md](BROWSERS.md).
 
 ## Core Philosophy
 
 Optimize for performance.
+
+## Code Writing Rules
+
+- Don’t assume. Don’t hide confusion. Surface tradeoffs.
+- Minimum code that solves the problem. Nothing speculative.
+- Touch only what you must. Clean up only your own mess.
+- Define success criteria. Loop until verified.
 
 ### Architecture Principles
 
