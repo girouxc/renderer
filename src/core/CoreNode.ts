@@ -2736,6 +2736,7 @@ export class CoreNode extends EventEmitter {
       if (this.props.shader === def) return;
       this.hasShaderUpdater = false;
       this.hasShaderTimeFn = false;
+      this.stage.untrackTimedNode(this);
       this.props.shader = def;
       this.setUpdateType(UpdateType.IsRenderable);
       return;

@@ -451,14 +451,11 @@ export class WebGlRenderer extends CoreRenderer {
       this.newRenderOp(node, i);
     }
 
-    if (!this.curRenderOp) {
-      return;
-    }
-    let tidx = this.curRenderOp.addTexture(ctx);
+    let tidx = this.curRenderOp!.addTexture(ctx);
 
     if (tidx === 0xffffffff) {
       this.newRenderOp(node, i);
-      tidx = this.curRenderOp.addTexture(ctx);
+      tidx = this.curRenderOp!.addTexture(ctx);
     }
 
     // Only rewrite the CPU-side buffer when the node is dirty.
