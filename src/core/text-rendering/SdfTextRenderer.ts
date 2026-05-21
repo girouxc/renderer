@@ -16,6 +16,8 @@ import type { WebGlShaderNode } from '../renderers/webgl/WebGlShaderNode.js';
 import { isProductionEnvironment } from '../../utils.js';
 import type { TextLayout, GlyphLayout } from './TextRenderer.js';
 import { mapTextLayout } from './TextLayoutEngine.js';
+import type { RectWithValid } from '../lib/utils.js';
+import type { Dimensions } from '../../common/CommonTypes.js';
 
 // Type definition to match interface
 const type = 'sdf' as const;
@@ -144,14 +146,12 @@ const renderQuads = (
         cache.vertices,
         cache.glyphCount,
         ctxTexture,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        renderProps.clippingRect as any,
+        renderProps.clippingRect,
         renderProps.worldAlpha,
         layout.width,
         layout.height,
         renderProps.parentHasRenderTexture,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        renderProps.framebufferDimensions as any,
+        renderProps.framebufferDimensions,
         sdfShader!,
       );
       return null;
@@ -160,7 +160,6 @@ const renderQuads = (
 
   // --- Cache-miss slow path -----------------------------------------------
   const startIdx = webGlRenderer.sdfBufferIdx;
-
   webGlRenderer.addSdfQuads(
     layout.glyphs,
     layout.fontScale,
@@ -169,13 +168,12 @@ const renderQuads = (
     renderProps.worldAlpha,
     layout.distanceRange,
     ctxTexture,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    renderProps.clippingRect as any,
+
+    renderProps.clippingRect,
     layout.width,
     layout.height,
     renderProps.parentHasRenderTexture,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    renderProps.framebufferDimensions as any,
+    renderProps.framebufferDimensions,
     sdfShader!,
   );
 
@@ -242,9 +240,9 @@ const generateTextLayout = (
   const maxHeight = props.maxHeight;
   const [
     lines,
-    remainingLines,
-    hasRemainingText,
-    bareLineHeight,
+    _remainingLines,
+    _hasRemainingText,
+    _bareLineHeight,
     lineHeightPx,
     effectiveWidth,
     effectiveHeight,

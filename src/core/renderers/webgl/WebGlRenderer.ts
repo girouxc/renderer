@@ -411,6 +411,18 @@ export class WebGlRenderer extends CoreRenderer {
       this.curSdfRenderOp = null;
     }
 
+    const props = node.props;
+    let tx = props.texture || this.stage.defaultTexture!;
+
+    if (tx.type === TextureType.subTexture) {
+      tx = (tx as SubTexture).parentTexture;
+    }
+
+    const ctx = tx.ctxTexture as WebGlCtxTexture | undefined;
+    if (ctx === undefined) {
+      return;
+    }
+
     const reuse = this.reuseRenderOp(node);
 
     // During RTT rendering, always use sequential allocation and write data
@@ -439,19 +451,14 @@ export class WebGlRenderer extends CoreRenderer {
       this.newRenderOp(node, i);
     }
 
-    const props = node.props;
-    let tx = props.texture || this.stage.defaultTexture!;
-
-    if (tx.type === TextureType.subTexture) {
-      tx = (tx as SubTexture).parentTexture;
+    if (!this.curRenderOp) {
+      return;
     }
-
-    const texture = tx.ctxTexture as WebGlCtxTexture;
-    let tidx = this.curRenderOp!.addTexture(texture);
+    let tidx = this.curRenderOp.addTexture(ctx);
 
     if (tidx === 0xffffffff) {
       this.newRenderOp(node, i);
-      tidx = this.curRenderOp!.addTexture(texture);
+      tidx = this.curRenderOp.addTexture(ctx);
     }
 
     // Only rewrite the CPU-side buffer when the node is dirty.

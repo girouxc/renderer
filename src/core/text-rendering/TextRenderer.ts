@@ -1,4 +1,6 @@
+import type { Dimensions } from '../../common/CommonTypes.js';
 import type { CoreTextNodeProps } from '../CoreTextNode.js';
+import type { RectWithValid } from '../lib/utils.js';
 import type { CoreRenderer } from '../renderers/CoreRenderer.js';
 import type { SdfRenderOp } from '../renderers/webgl/SdfRenderOp.js';
 import type { Stage } from '../Stage.js';
@@ -345,11 +347,11 @@ export interface TextRenderProps {
   offsetY: number;
   worldAlpha: number;
   globalTransform: Float32Array;
-  clippingRect: unknown;
+  clippingRect: RectWithValid;
   width: number;
   height: number;
   parentHasRenderTexture: boolean;
-  framebufferDimensions: unknown;
+  framebufferDimensions: Dimensions | null;
   stage: Stage;
   /** Optional SDF vertex cache — passed by CoreTextNode for cache-hit fast path. */
   sdfCache?: SdfVertexCache;
