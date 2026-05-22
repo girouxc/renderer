@@ -23,6 +23,11 @@ export interface Dimensions {
 export type NodeTextLoadedPayload = {
   type: 'text';
   dimensions: Dimensions;
+  /**
+   * Visible glyph extent — from the first line's cap-top to the last
+   * line's descender bottom. See `CoreTextNode.trimmedHeight`.
+   */
+  trimmedHeight: number;
 };
 
 /**

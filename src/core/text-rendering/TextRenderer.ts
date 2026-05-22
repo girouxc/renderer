@@ -318,6 +318,11 @@ export interface TextLayout {
    */
   height: number;
   /**
+   * Trimmed text height — cap-top of the first line to descender bottom
+   * of the last line. See `TextRenderInfo.trimmedHeight`.
+   */
+  trimmedHeight: number;
+  /**
    * Font scale factor
    */
   fontScale: number;
@@ -413,6 +418,21 @@ export interface TextRenderProps {
 export interface TextRenderInfo {
   width: number;
   height: number;
+  /**
+   * Height of the visible glyph extent — from the first line's cap-top to
+   * the last line's descender bottom. Excludes half-leading and the slack
+   * between the font's ascender and cap-top.
+   *
+   * @remarks
+   * Formula: `capHeight − descender + (lines − 1) × lineHeightPx`
+   * (descender is negative in font metrics, so subtracting it adds the
+   * descender depth). For empty text, this is 0.
+   *
+   * Use this when you want flex `alignItems: 'center'` (or any layout
+   * that aligns by node `h`) to optically center the visible glyphs.
+   * Set `node.h = node.trimmedHeight` after the `loaded` event.
+   */
+  trimmedHeight: number;
   hasRemainingText?: boolean;
   remainingLines?: number;
   imageData?: ImageData | null; // Image data for Canvas Text Renderer

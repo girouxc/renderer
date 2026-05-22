@@ -87,6 +87,7 @@ const renderText = (props: CoreTextNodeProps): TextRenderInfo => {
     return {
       width: 0,
       height: 0,
+      trimmedHeight: 0,
     };
   }
 
@@ -191,10 +192,18 @@ const renderText = (props: CoreTextNodeProps): TextRenderInfo => {
   if (canvas.width > 0 && canvas.height > 0) {
     imageData = context.getImageData(0, 0, canvasW, canvasH);
   }
+  // Cap-top of first line to descender bottom of last line.
+  // descender is negative in NormalizedFontMetrics.
+  const trimmedHeight =
+    lineAmount > 0
+      ? metrics.capHeight - metrics.descender + (lineAmount - 1) * lineHeightPx
+      : 0;
+
   return {
     imageData,
     width: effectiveWidth,
     height: effectiveHeight,
+    trimmedHeight,
     remainingLines,
     hasRemainingText,
   };
