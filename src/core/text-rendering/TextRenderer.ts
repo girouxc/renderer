@@ -231,13 +231,15 @@ export interface TrProps extends TrFontProps {
    */
   maxLines: number;
   /**
-   * Vertical Align for text when lineHeight > fontSize
+   * Vertical alignment of the text block within `maxHeight`.
    *
    * @remarks
-   * This property sets the vertical align of the text.
-   * Not yet implemented in the SDF renderer.
+   * Activates when `maxHeight > 0`. Composes with `textBaselineMode`
+   * (per-line anchor). CSS line-box semantics — `'top'` leaves
+   * half-leading above the first line's cap-top; `'bottom'` leaves
+   * half-leading below the last line's descender.
    *
-   * @default middle
+   * @default top
    */
   verticalAlign: TextVerticalAlign;
   /**

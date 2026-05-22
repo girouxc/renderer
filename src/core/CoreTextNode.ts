@@ -144,13 +144,16 @@ export class CoreTextNode extends CoreNode implements CoreTextNodeProps {
         }
         mountTranslateX = mountX * maxWidth;
       }
-      if (contain & TextConstraint.height && maxHeight > 0) {
-        if (verticalAlign === 'bottom') {
-          containY = maxHeight - h;
-        } else if (verticalAlign === 'middle') {
-          containY = (maxHeight - h) * 0.5;
-        }
+      if (contain & TextConstraint.height && hasMaxHeight === true) {
         mountTranslateY = mountY * maxHeight;
+      }
+    }
+
+    if (hasMaxHeight === true) {
+      if (verticalAlign === 'bottom') {
+        containY = maxHeight - h;
+      } else if (verticalAlign === 'middle') {
+        containY = (maxHeight - h) * 0.5;
       }
     }
 

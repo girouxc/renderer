@@ -39,26 +39,40 @@ const NODE_PROPS = {
 } satisfies Partial<ITextNodeProps>;
 
 const CONTAINER_SIZE = 200;
+const CONTAINER_SIZE_3L = 280;
 
-function getSquare(renderer: RendererMain, node: ITextNode) {
+function getSquare(
+  renderer: RendererMain,
+  node: ITextNode,
+  size = CONTAINER_SIZE,
+) {
   const wrapper = renderer.createNode({
-    w: CONTAINER_SIZE,
-    h: CONTAINER_SIZE,
+    w: size,
+    h: size,
   });
   const line1 = renderer.createNode({
-    w: CONTAINER_SIZE,
+    w: size,
     h: 1,
     color: 0x00ff00ff,
     y: NODE_PROPS.lineHeight,
   });
   line1.parent = wrapper;
   const line2 = renderer.createNode({
-    w: CONTAINER_SIZE,
+    w: size,
     h: 1,
     color: 0x00ff00ff,
     y: NODE_PROPS.lineHeight * 2,
   });
   line2.parent = wrapper;
+  if (size >= NODE_PROPS.lineHeight * 3) {
+    const line3 = renderer.createNode({
+      w: size,
+      h: 1,
+      color: 0x00ff00ff,
+      y: NODE_PROPS.lineHeight * 3,
+    });
+    line3.parent = wrapper;
+  }
   node.parent = wrapper;
   return wrapper;
 }
@@ -142,6 +156,49 @@ function generateVerticalAlignTest(
             }),
           ),
         ]);
+      },
+    },
+    {
+      title: `Three Lines ('verticalAlign', ${textRenderer}, fontSize = 50, lineHeight = 70)`,
+      content: async (rowNode) => {
+        const nodeProps = {
+          ...NODE_PROPS,
+          text: 'abcd\nefgh\ntxyz',
+          textRendererOverride: textRenderer,
+          contain: 'height',
+          maxHeight: CONTAINER_SIZE_3L,
+        } satisfies Partial<ITextNodeProps>;
+
+        const baselineNode = renderer.createTextNode({
+          ...nodeProps,
+          verticalAlign: 'middle',
+        });
+
+        return await constructTestRow(
+          { renderer, rowNode, containerSize: CONTAINER_SIZE_3L },
+          [
+            'verticalAlign: middle\n(default)\n->',
+            getSquare(renderer, baselineNode, CONTAINER_SIZE_3L),
+            'top ->',
+            getSquare(
+              renderer,
+              renderer.createTextNode({
+                ...nodeProps,
+                verticalAlign: 'top',
+              }),
+              CONTAINER_SIZE_3L,
+            ),
+            'bottom ->',
+            getSquare(
+              renderer,
+              renderer.createTextNode({
+                ...nodeProps,
+                verticalAlign: 'bottom',
+              }),
+              CONTAINER_SIZE_3L,
+            ),
+          ],
+        );
       },
     },
   ] satisfies TestRow[];
