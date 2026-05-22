@@ -231,10 +231,13 @@ export interface TrProps extends TrFontProps {
    */
   maxLines: number;
   /**
-   * Vertical alignment of the text block within `maxHeight`.
+   * Vertical alignment of the text block within its containing box.
    *
    * @remarks
-   * Activates when `maxHeight > 0`. Composes with `textBaselineMode`
+   * The containing box is `maxHeight` if set, otherwise the node's
+   * own `h` (which a flex parent or the user may have grown beyond
+   * the intrinsic text height). Activates whenever the box is taller
+   * than the intrinsic text height. Composes with `textBaselineMode`
    * (per-line anchor). CSS line-box semantics — `'top'` leaves
    * half-leading above the first line's cap-top; `'bottom'` leaves
    * half-leading below the last line's descender.

@@ -149,11 +149,14 @@ export class CoreTextNode extends CoreNode implements CoreTextNodeProps {
       }
     }
 
-    if (hasMaxHeight === true) {
+    const intrinsicH = this._renderInfo.height;
+    const boxH = hasMaxHeight === true ? maxHeight : h;
+    const slackY = boxH - intrinsicH;
+    if (slackY > 0) {
       if (verticalAlign === 'bottom') {
-        containY = maxHeight - h;
+        containY = slackY;
       } else if (verticalAlign === 'middle') {
-        containY = (maxHeight - h) * 0.5;
+        containY = slackY * 0.5;
       }
     }
 

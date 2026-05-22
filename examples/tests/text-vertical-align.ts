@@ -7,6 +7,7 @@ import type { ExampleSettings } from '../common/ExampleSettings.js';
 import { paginateTestRows, type TestRow } from '../common/paginateTestRows.js';
 import { PageContainer } from '../common/PageContainer.js';
 import { constructTestRow } from '../common/constructTestRow.js';
+import { waitForLoadedDimensions } from '../common/utils.js';
 
 export async function automation(settings: ExampleSettings) {
   // Snapshot all the pages
@@ -199,6 +200,43 @@ function generateVerticalAlignTest(
             ),
           ],
         );
+      },
+    },
+    {
+      title: `Explicit h, no maxHeight ('verticalAlign', ${textRenderer}, fontSize = 50, lineHeight = 70)`,
+      content: async (rowNode) => {
+        const baseProps = {
+          ...NODE_PROPS,
+          text: 'txyz',
+          textRendererOverride: textRenderer,
+          forceLoad: true,
+        } satisfies Partial<ITextNodeProps>;
+
+        const makeBoxedTextNode = async (
+          verticalAlign: 'top' | 'middle' | 'bottom',
+        ) => {
+          const node = renderer.createTextNode({
+            ...baseProps,
+            verticalAlign,
+            parent: rowNode,
+          });
+          await waitForLoadedDimensions(node);
+          node.h = CONTAINER_SIZE;
+          return node;
+        };
+
+        const middleNode = await makeBoxedTextNode('middle');
+        const topNode = await makeBoxedTextNode('top');
+        const bottomNode = await makeBoxedTextNode('bottom');
+
+        return await constructTestRow({ renderer, rowNode }, [
+          'verticalAlign: middle\n(node.h, no maxHeight)\n->',
+          getSquare(renderer, middleNode),
+          'top ->',
+          getSquare(renderer, topNode),
+          'bottom ->',
+          getSquare(renderer, bottomNode),
+        ]);
       },
     },
   ] satisfies TestRow[];
