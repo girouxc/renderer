@@ -21,7 +21,7 @@ export interface BorderProps {
   /**
    * Alignment of the border
    *
-   * @default 'inside'
+   * @default 'outside'
    */
   align: number | 'inside' | 'center' | 'outside';
   /**
@@ -63,7 +63,7 @@ export function getBorderProps<P extends string>(
     },
     [pf + 'color']: 0xffffffff,
     [pf + 'align']: {
-      default: 0, //inside,
+      default: 1, //outside,
       resolve(value) {
         if (!isNaN(value)) {
           return value as number;
