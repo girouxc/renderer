@@ -848,10 +848,21 @@ export class Inspector {
   }
 
   createTextNode(node: CoreTextNode): CoreTextNode {
+    // CoreTextNode carries two prop bags:
+    //   - `node.props` (inherited CoreNodeProps): x, y, w, h, mount*, alpha…
+    //   - `node.textProps` (private): text, fontSize, fontFamily, lineHeight…
+    // The mirror div needs both, so we merge them for the initial paint.
+    // Without `node.props` the div would have no left/top and render at (0,0)
+    // regardless of where the canvas drew the text.
     // eslint-disable-next-line
     // @ts-ignore - textProps is a private property and keeping it that way
     // but we need it from the inspector to set the initial properties on the div element
-    const div = this.createDiv(node.id, node.textProps);
+    const mergedProps = {
+      ...node.props,
+       
+      ...(node as unknown as { textProps: CoreTextNodeProps }).textProps,
+    } as CoreTextNodeProps;
+    const div = this.createDiv(node.id, mergedProps);
     (div as HTMLElement & { node: CoreNode }).node = node;
     (node as CoreTextNode & { div: HTMLElement }).div = div;
 
@@ -952,12 +963,18 @@ export class Inspector {
     };
     // Define traps for each property in knownProperties
     knownProperties.forEach((property) => {
-      let originalProp = Object.getOwnPropertyDescriptor(node, property);
-
-      if (originalProp === undefined) {
-        // Search the prototype chain for the property descriptor
-        const proto = Object.getPrototypeOf(node) as CoreNode | CoreTextNode;
+      // Walk the entire prototype chain. CoreTextNode extends CoreNode, so
+      // properties like x / y / w / h / mountX / mountY are defined on
+      // CoreNode.prototype — two hops up from a CoreTextNode instance. A
+      // single-level lookup (the previous behavior) returned undefined for
+      // those props on text nodes and skipped installing the trap, which
+      // meant updates to those props never reached the mirror div.
+      let originalProp: PropertyDescriptor | undefined =
+        Object.getOwnPropertyDescriptor(node, property);
+      let proto: object | null = Object.getPrototypeOf(node) as object | null;
+      while (originalProp === undefined && proto !== null) {
         originalProp = Object.getOwnPropertyDescriptor(proto, property);
+        proto = Object.getPrototypeOf(proto) as object | null;
       }
 
       if (originalProp === undefined) {
