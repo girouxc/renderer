@@ -9,6 +9,7 @@ import type { WebGlRenderer } from '../../renderers/webgl/WebGlRenderer.js';
 
 export const RadialProgress: WebGlShaderType<RadialProgressProps> = {
   props: RadialProgressTemplate.props,
+  time: true,
   update(node: CoreNode) {
     const props = this.props!;
 
@@ -21,6 +22,8 @@ export const RadialProgress: WebGlShaderType<RadialProgressProps> = {
     this.uniform1f('u_progress', props.progress);
     this.uniform1f('u_startAngle', props.startAngle);
     this.uniform1f('u_direction', props.direction);
+    this.uniform1f('u_duration', props.duration);
+    this.uniform1f('u_countdown', props.countdown);
     this.uniform1fv('u_stops', new Float32Array(props.stops));
 
     const colors: number[] = [];
@@ -61,6 +64,7 @@ export const RadialProgress: WebGlShaderType<RadialProgressProps> = {
       #define TWO_PI 6.28318530717958647692
 
       uniform float u_alpha;
+      uniform float u_time;
       uniform vec2 u_dimensions;
       uniform sampler2D u_texture;
 
@@ -70,6 +74,8 @@ export const RadialProgress: WebGlShaderType<RadialProgressProps> = {
       uniform float u_progress;
       uniform float u_startAngle;
       uniform float u_direction;
+      uniform float u_duration;
+      uniform float u_countdown;
 
       uniform float u_stops[MAX_STOPS];
       uniform vec4 u_colors[MAX_STOPS];
@@ -107,6 +113,13 @@ export const RadialProgress: WebGlShaderType<RadialProgressProps> = {
       void main() {
         vec4 base = texture2D(u_texture, v_textureCoords) * v_color;
 
+        // Effective progress: when u_duration > 0 the shader self-animates from
+        // u_time, otherwise we use the static u_progress prop. countdown == 1
+        // drains (1 -> 0), countdown == 0 fills (0 -> 1).
+        float cyclePos = u_duration > 0.0 ? fract(u_time / u_duration) : 0.0;
+        float animProgress = u_countdown > 0.5 ? 1.0 - cyclePos : cyclePos;
+        float progress = u_duration > 0.0 ? animProgress : u_progress;
+
         vec2 p = v_nodeCoords.xy * u_dimensions - u_center;
         float dist = length(p);
         float halfW = u_width * 0.5;
@@ -122,24 +135,24 @@ export const RadialProgress: WebGlShaderType<RadialProgressProps> = {
 
         // Filled arc coverage (1 if in filled arc, else 0). When progress >= 1 the
         // whole ring is filled regardless of \`t\` -- guards against the mod() seam.
-        float arcCoverage = u_progress >= 1.0 ? 1.0 : step(t, u_progress);
+        float arcCoverage = progress >= 1.0 ? 1.0 : step(t, progress);
         float fillCoverage = ringCoverage * arcCoverage;
 
         #if CAP_ROUND
           // Round caps: discs of radius halfW at the start and head of the arc
           float a0 = u_startAngle;
-          float a1 = u_startAngle + u_direction * u_progress * TWO_PI;
+          float a1 = u_startAngle + u_direction * progress * TWO_PI;
           vec2 cap0 = vec2(cos(a0), sin(a0)) * u_radius;
           vec2 cap1 = vec2(cos(a1), sin(a1)) * u_radius;
           float capMask = max(discCoverage(p, cap0, halfW), discCoverage(p, cap1, halfW));
           // Caps only visible when there's something to cap (progress > 0 and < 1).
-          float capGate = step(0.0001, u_progress) * step(u_progress, 0.9999);
+          float capGate = step(0.0001, progress) * step(progress, 0.9999);
           fillCoverage = max(fillCoverage, capMask * capGate);
         #endif
 
         // Sample gradient. Normalize \`t\` to the *filled* portion so the gradient
         // spans the visible arc end-to-end regardless of progress.
-        float gradT = u_progress > 0.0 ? clamp(t / u_progress, 0.0, 1.0) : 0.0;
+        float gradT = progress > 0.0 ? clamp(t / progress, 0.0, 1.0) : 0.0;
         vec4 fillCol = getGradientColor(gradT);
 
         // Composite: track under fill (if track enabled), both gated by ringCoverage

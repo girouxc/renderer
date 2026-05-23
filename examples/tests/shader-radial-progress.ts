@@ -6,7 +6,11 @@ export async function automation(settings: ExampleSettings) {
 }
 
 export default async function test({ renderer, testRoot }: ExampleSettings) {
-  // 1. Fill-up animation: progress 0 → 1, looping. Cyan ring on a dim track.
+  const ANIM_DURATION = 2000;
+
+  // 1. Self-animating fill: shader drives progress 0 → 1 from u_time, looping.
+  //    No JS-side animation needed — pure GLSL/Canvas math each frame.
+  //    Starts static (duration: 0); press SPACE to enable.
   const fillRing = renderer.createNode({
     x: 40,
     y: 40,
@@ -15,22 +19,18 @@ export default async function test({ renderer, testRoot }: ExampleSettings) {
     color: 0x00000000,
     shader: renderer.createShader('RadialProgress', {
       width: 16,
+      duration: 0,
       progress: 0,
+      countdown: 0, // fill 0 -> 1
       colors: [0x4aff80ff],
       trackColor: 0x1c3a2aff,
     }),
     parent: testRoot,
   });
 
-  // fillRing
-  //   .animate(
-  //     { shaderProps: { progress: 1 } },
-  //     { duration: 2000, loop: true, easing: 'linear' },
-  //   )
-  //   .start();
-
-  // 2. Countdown animation: progress 1 → 0, looping. Matches the reference
-  //    screenshot recipe (blue arc, dim blue track).
+  // 2. Self-animating countdown: shader drives progress 1 → 0, looping.
+  //    Matches the reference screenshot recipe (blue arc, dim blue track).
+  //    Starts static (duration: 0); press SPACE to enable.
   const countdownRing = renderer.createNode({
     x: 380,
     y: 40,
@@ -39,19 +39,14 @@ export default async function test({ renderer, testRoot }: ExampleSettings) {
     color: 0x00000000,
     shader: renderer.createShader('RadialProgress', {
       width: 14,
+      duration: 0,
       progress: 1,
+      countdown: 1, // drain 1 -> 0
       colors: [0x4aa3ffff],
       trackColor: 0x1f3a5cff,
     }),
     parent: testRoot,
   });
-
-  // countdownRing
-  //   .animate(
-  //     { shaderProps: { progress: 0 } },
-  //     { duration: 2000, loop: true, easing: 'linear' },
-  //   )
-  //   .start();
 
   // 3. Multi-stop gradient swept along the arc, 50% progress
   renderer.createNode({
@@ -117,5 +112,39 @@ export default async function test({ renderer, testRoot }: ExampleSettings) {
       trackColor: 0x33333366,
     }),
     parent: testRoot,
+  });
+
+  // Instructions
+  const instructions = renderer.createTextNode({
+    x: 40,
+    y: 720,
+    fontSize: 28,
+    fontFamily: 'Ubuntu',
+    color: 0xffffffff,
+    text: 'Press SPACE to toggle the fill + countdown animations (top-left, top-middle).',
+    parent: testRoot,
+  });
+
+  const statusLabel = renderer.createTextNode({
+    x: 40,
+    y: 760,
+    fontSize: 24,
+    fontFamily: 'Ubuntu',
+    color: 0xaaaaaaff,
+    text: 'animation: off',
+    parent: testRoot,
+  });
+  // statusLabel and instructions kept as locals so they aren't GC-tracked away
+  void instructions;
+
+  let animationOn = false;
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== ' ' && e.code !== 'Space') return;
+    e.preventDefault();
+    animationOn = !animationOn;
+    const d = animationOn ? ANIM_DURATION : 0;
+    fillRing.shader.props!.duration = d;
+    countdownRing.shader.props!.duration = d;
+    statusLabel.text = 'animation: ' + (animationOn ? 'on' : 'off');
   });
 }

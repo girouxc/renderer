@@ -58,6 +58,22 @@ export interface RadialProgressProps {
    * @default 1
    */
   cap: 0 | 1;
+  /**
+   * When > 0, the shader self-animates one full cycle every `duration` ms,
+   * looping. Overrides the static `progress` prop. `0` disables (use `progress`).
+   *
+   * Pair with `countdown` to choose fill vs. drain.
+   *
+   * @default 0
+   */
+  duration: number;
+  /**
+   * Animation direction when `duration > 0`. `0` fills (0→1 over a cycle),
+   * `1` drains (1→0 over a cycle). Ignored when `duration === 0`.
+   *
+   * @default 1
+   */
+  countdown: 0 | 1;
 }
 
 export const RadialProgressTemplate: CoreShaderType<RadialProgressProps> = {
@@ -108,5 +124,14 @@ export const RadialProgressTemplate: CoreShaderType<RadialProgressProps> = {
     },
     trackColor: 0x00000000,
     cap: 1,
+    duration: {
+      default: 0,
+      resolve(value) {
+        if (value === undefined) return this.default;
+        if (value < 0) return 0;
+        return value;
+      },
+    },
+    countdown: 1,
   },
 };

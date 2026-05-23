@@ -51,6 +51,7 @@ export const RadialProgress: CanvasShaderType<
   ComputedRadialProgressValues
 > = {
   props: RadialProgressTemplate.props,
+  time: true,
   update(node) {
     const props = this.props!;
     const autoRadius = Math.min(node.w, node.h) * 0.5 - props.width * 0.5;
@@ -76,8 +77,16 @@ export const RadialProgress: CanvasShaderType<
       .computed as ComputedRadialProgressValues;
     const { tx, ty } = node.globalTransform!;
     const props = this.props!;
-    const { width, progress, startAngle, direction, cap } = props;
+    const { width, startAngle, direction, cap, duration, countdown } = props;
     const stops = props.stops;
+
+    // Effective progress: when duration > 0 the shader self-animates from
+    // node.time (millis since stage start). Otherwise use the static prop.
+    let progress = props.progress;
+    if (duration > 0) {
+      const cyclePos = (node.time % duration) / duration;
+      progress = countdown === 1 ? 1 - cyclePos : cyclePos;
+    }
 
     const ax = tx + cx;
     const ay = ty + cy;

@@ -98,6 +98,24 @@ describe('RadialProgressTemplate', () => {
     });
   });
 
+  describe('duration', () => {
+    const cfg = RadialProgressTemplate.props!.duration;
+    if (!isAdvancedShaderProp(cfg))
+      throw new Error('duration should be advanced');
+
+    it('returns default (0) when undefined', () => {
+      expect(cfg.resolve!(undefined as never, {} as never)).toBe(0);
+    });
+
+    it('clamps negative values to 0', () => {
+      expect(cfg.resolve!(-100 as never, {} as never)).toBe(0);
+    });
+
+    it('passes through positive values', () => {
+      expect(cfg.resolve!(5000 as never, {} as never)).toBe(5000);
+    });
+  });
+
   describe('defaults via resolveShaderProps', () => {
     it('applies all defaults when no props given', () => {
       const r = resolve({});
@@ -110,6 +128,8 @@ describe('RadialProgressTemplate', () => {
       expect(r.stops).toEqual([0]);
       expect(r.trackColor).toBe(0x00000000);
       expect(r.cap).toBe(1);
+      expect(r.duration).toBe(0);
+      expect(r.countdown).toBe(1);
     });
 
     it('clamps progress through full resolution path', () => {
@@ -120,6 +140,12 @@ describe('RadialProgressTemplate', () => {
     it('auto-distributes stops through full resolution path', () => {
       const r = resolve({ colors: [0xff0000ff, 0x00ff00ff, 0x0000ffff] });
       expect(r.stops).toEqual([0, 0.5, 1]);
+    });
+
+    it('threads duration and countdown through full resolution path', () => {
+      const r = resolve({ duration: 3000, countdown: 0 });
+      expect(r.duration).toBe(3000);
+      expect(r.countdown).toBe(0);
     });
   });
 });
