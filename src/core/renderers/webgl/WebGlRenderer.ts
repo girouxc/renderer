@@ -530,20 +530,12 @@ export class WebGlRenderer extends CoreRenderer {
       return false;
     }
 
-    const shader = node.props.shader as WebGlShaderNode;
-    const curShader = curRenderOp.shader as WebGlShaderNode;
-
-    if (curShader.shaderKey === 'default' && shader.shaderKey === 'default') {
-      return true;
-    }
-
-    // Check if the shader is the same
-    if (curShader !== shader) {
-      return false;
-    }
+    // Correctness checks first — these MUST pass regardless of shader.
+    // RTT mismatch and clipping rect differences can't be batched: the
+    // draw call applies one framebuffer / one scissor to every quad in
+    // the op.
 
     // Force new render operation if rendering to texture is different
-    // This is the cheap check, so do it first
     if (
       USE_RTT &&
       (curRenderOp.parentHasRenderTexture !== node.parentHasRenderTexture ||
@@ -553,8 +545,19 @@ export class WebGlRenderer extends CoreRenderer {
     }
 
     // Switching clipping rect will require a new render operation
-    // This involves object accessing so do it after integer/boolean checks
     if (compareRect(curRenderOp.clippingRect, node.clippingRect) === false) {
+      return false;
+    }
+
+    const shader = node.props.shader as WebGlShaderNode;
+    const curShader = curRenderOp.shader as WebGlShaderNode;
+
+    if (curShader.shaderKey === 'default' && shader.shaderKey === 'default') {
+      return true;
+    }
+
+    // Check if the shader is the same
+    if (curShader !== shader) {
       return false;
     }
 

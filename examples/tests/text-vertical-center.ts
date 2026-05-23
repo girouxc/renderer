@@ -101,13 +101,18 @@ export default async function test({ renderer, testRoot }: ExampleSettings) {
         clipping: true,
       });
 
-      // Geometric center guide.
+      // Geometric center guide. Height is 1.35, not 1, to avoid sub-pixel
+      // rasterization gaps: at the default examples config (resolution=720,
+      // appHeight=1080) the logical→physical scale is 0.667, so a 1-logical-px
+      // line at certain Y positions covers no pixel center and disappears
+      // (e.g. the fontSize 60 row at y=430). A 2-logical-px line is always
+      // ≥ 1 physical pixel and guaranteed to rasterize.
       renderer.createNode({
         parent: box,
         x: 0,
         y: Math.round(BOX_H / 2),
         w: BOX_W,
-        h: 1,
+        h: 1.35,
         color: 0xff0000ff,
       });
 
