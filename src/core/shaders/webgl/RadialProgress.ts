@@ -155,19 +155,26 @@ export const RadialProgress: WebGlShaderType<RadialProgressProps> = {
         float gradT = progress > 0.0 ? clamp(t / progress, 0.0, 1.0) : 0.0;
         vec4 fillCol = getGradientColor(gradT);
 
-        // Composite: track under fill (if track enabled), both gated by ringCoverage
+        // Composite: track under fill (if track enabled), both gated by ringCoverage.
+        // We work in PREMULTIPLIED-alpha space here so AA edges composite cleanly
+        // against \`base\` -- mix(base.rgb, layer.rgb, la) with a coverage-scaled
+        // \`layer\` would multiply layer.rgb by coverage a second time and darken
+        // the AA falloff (see issue #36). The renderer's blend func is
+        // (ONE, ONE_MINUS_SRC_ALPHA), which expects premultiplied output.
+        vec4 fillPM = vec4(fillCol.rgb * fillCol.a, fillCol.a);
         vec4 layer = vec4(0.0);
         #if HAS_TRACK
+          vec4 trackPM = vec4(u_trackColor.rgb * u_trackColor.a, u_trackColor.a);
           float trackCoverage = ringCoverage * (1.0 - fillCoverage);
-          layer = u_trackColor * trackCoverage + fillCol * fillCoverage;
+          layer = trackPM * trackCoverage + fillPM * fillCoverage;
         #else
-          layer = fillCol * fillCoverage;
+          layer = fillPM * fillCoverage;
         #endif
 
-        // Composite layer over base. Output alpha = base.a + layer.a*(1-base.a)
-        // so the ring is visible even when the node's base color is fully transparent.
+        // Premultiplied "over": out = src + dst*(1 - src.a). The output stays
+        // visible on a fully-transparent \`base\` because layer brings its own alpha.
         float la = clamp(layer.a, 0.0, 1.0);
-        vec3 blended = mix(base.rgb, layer.rgb, la);
+        vec3 blended = base.rgb * (1.0 - la) + layer.rgb;
         float outA = base.a + la * (1.0 - base.a);
         gl_FragColor = vec4(blended, outA);
       }
