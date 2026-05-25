@@ -1221,6 +1221,15 @@ export class WebGlRenderer extends CoreRenderer {
     const arr = new Float32Array(this.rttQuadBuffer!, 0, this.curBufferIdx);
     glw.arrayBufferData(buffer, arr, glw.STATIC_DRAW);
 
+    // Upload the shared SDF buffer so any text rendered into this RTT pass
+    // has its vertex data available on the GPU before drawElements runs.
+    if (this.sdfBufferIdx > 0) {
+      const sdfBuf =
+        this.sdfQuadBufferCollection.getBuffer('a_position') || null;
+      const sdfArr = new Float32Array(this.sdfBuffer, 0, this.sdfBufferIdx);
+      glw.arrayBufferData(sdfBuf, sdfArr, glw.DYNAMIC_DRAW);
+    }
+
     for (let i = 0, length = this.renderOps.length; i < length; i++) {
       this.renderOps[i]!.draw(this);
     }

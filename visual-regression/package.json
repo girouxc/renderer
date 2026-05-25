@@ -9,7 +9,7 @@
     "start": "pnpm test:visual",
     "test:visual": "tsc && node dist/src/index.js",
     "test:visual:update": "tsc && node dist/src/index.js --capture --overwrite",
-    "test:visual:update-ci": "tsc && RUNTIME_ENV=ci node dist/src/index.js --capture --overwrite",
+    "test:visual:update-ci": "tsc && node dist/src/index.js --ci --capture --overwrite",
     "build": "tsc",
     "build:renderer": "cd .. && pnpm build",
     "build:examples": "cd ../examples && VRT_AUTOSIZE=true pnpm build",
