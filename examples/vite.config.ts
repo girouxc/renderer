@@ -55,6 +55,13 @@ export default defineConfig(({ command, mode, isSsrBuild }) => {
       minify: false,
       sourcemap: true,
       outDir: path.resolve(__dirname, 'dist'),
+      // Never inline SVGs as data URIs. The renderer routes file-URL SVGs
+      // through loadSvg (canvas rasterization), but data-URI SVGs fall
+      // through to createImageBitmap, which Chromium can't decode for SVG
+      // blobs — those textures end up empty. Other asset types keep the
+      // default inline threshold.
+      assetsInlineLimit: (filePath) =>
+        filePath.endsWith('.svg') ? false : undefined,
     },
     server: {
       headers: {
