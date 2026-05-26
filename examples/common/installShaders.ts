@@ -26,4 +26,5 @@ export async function installShaders(stage: Stage, renderMode: string) {
   stage.shManager.registerShaderType('RadialGradient', shaders.RadialGradient);
   stage.shManager.registerShaderType('LinearGradient', shaders.LinearGradient);
   stage.shManager.registerShaderType('RadialProgress', shaders.RadialProgress);
+  stage.shManager.registerShaderType('Blur', shaders.Blur);
 }
