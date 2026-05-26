@@ -1,6 +1,6 @@
 {
   "name": "@solidtv/renderer",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "description": "SolidTV Renderer",
   "type": "module",
   "main": "./dist/exports/index.js",
