@@ -56,14 +56,30 @@ export const loadCompressedTexture = async (
   url: string,
 ): Promise<TextureData> => {
   try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(
-        `Failed to fetch compressed texture: ${response.status} ${response.statusText}`,
-      );
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
+    const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', url, true);
+      xhr.responseType = 'arraybuffer';
+      xhr.onload = () => {
+        if ((xhr.status >= 200 && xhr.status < 300) || xhr.status === 0) {
+          resolve(xhr.response as ArrayBuffer);
+        } else {
+          reject(
+            new Error(
+              `Failed to fetch compressed texture: ${xhr.status} ${xhr.statusText}`,
+            ),
+          );
+        }
+      };
+      xhr.onerror = () => {
+        reject(
+          new Error(
+            'Network error occurred while trying to fetch the compressed texture.',
+          ),
+        );
+      };
+      xhr.send(null);
+    });
 
     // Ensure we have enough data to check magic numbers
     if (arrayBuffer.byteLength < 16) {

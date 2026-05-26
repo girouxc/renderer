@@ -322,13 +322,35 @@ export const loadFont = (
   const nwff: CoreTextNode[] = (nodesWaitingForFont[fontFamily] = []);
   // Create loading promise
   const loadPromise = (async (): Promise<void> => {
-    // Load font JSON data
-    const response = await fetch(atlasDataUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to load font data: ${response.statusText}`);
-    }
-
-    const fontData = (await response.json()) as SdfFontData;
+    const fontData = await new Promise<SdfFontData>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', atlasDataUrl, true);
+      xhr.responseType = 'json';
+      xhr.onload = () => {
+        if ((xhr.status >= 200 && xhr.status < 300) || xhr.status === 0) {
+          let data = xhr.response;
+          if (typeof data === 'string') {
+            try {
+              data = JSON.parse(data);
+            } catch (e) {
+              reject(new Error('Failed to parse font data JSON'));
+              return;
+            }
+          }
+          resolve(data as SdfFontData);
+        } else {
+          reject(new Error(`Failed to load font data: ${xhr.statusText}`));
+        }
+      };
+      xhr.onerror = () => {
+        reject(
+          new Error(
+            'Network error occurred while trying to load the font data.',
+          ),
+        );
+      };
+      xhr.send(null);
+    });
     if (!fontData || !fontData.chars) {
       throw new Error('Invalid SDF font data format');
     }
