@@ -26,7 +26,6 @@ export default async function ({ renderer, testRoot }: ExampleSettings) {
     color: 0xff0000ff,
     parent: testRoot,
     zIndex: 0,
-    zIndexLocked: 0,
     alpha: 0.5,
   });
 

@@ -859,7 +859,6 @@ export class Inspector {
     // but we need it from the inspector to set the initial properties on the div element
     const mergedProps = {
       ...node.props,
-       
       ...(node as unknown as { textProps: CoreTextNodeProps }).textProps,
     } as CoreTextNodeProps;
     const div = this.createDiv(node.id, mergedProps);
@@ -1230,6 +1229,11 @@ export class Inspector {
 
     // CSS mappable attribute
     if (stylePropertyMap[property]) {
+      // Text nodes must always stay at opacity 0.001 — never let alpha updates override it.
+      if (property === 'alpha' && div.style.pointerEvents === 'none') {
+        return;
+      }
+
       const mappedStyleResponse = stylePropertyMap[property]?.(value);
 
       if (mappedStyleResponse === null) {
@@ -1354,7 +1358,10 @@ export class Inspector {
         div.style.left = `${x - w * mountX}px`;
         div.style.width = `${w}px`;
         div.style.height = `${h}px`;
-        div.style.opacity = `${alpha}`;
+        // Text nodes must keep opacity at 0.001 — never override it from animation props.
+        if (div.style.pointerEvents !== 'none') {
+          div.style.opacity = `${alpha}`;
+        }
         div.style.rotate = `${rotation}rad`;
         div.style.scale = `${scale}`;
         div.style.color = convertColorToRgba(color);
