@@ -60,6 +60,11 @@ export default defineConfig(({ command, mode, isSsrBuild }) => {
       headers: {
         'Cross-Origin-Opener-Policy': 'same-origin',
         'Cross-Origin-Embedder-Policy': 'require-corp',
+        // Required under COEP=require-corp: without CORP, no-CORS subresource
+        // requests (e.g. <img> without a crossorigin attribute) are blocked
+        // even when same-origin. 'cross-origin' matches the existing
+        // Access-Control-Allow-Origin: * the dev server already sends.
+        'Cross-Origin-Resource-Policy': 'cross-origin',
       },
     },
     define: {
