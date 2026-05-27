@@ -295,6 +295,10 @@ export interface CoreNodeProps {
    * its descendants from overflowing outside of the Node's x/y/width/height
    * bounds.
    *
+   * Pass `true` to clip exactly to the Node's bounds, or pass a
+   * `[top, right, bottom, left]` tuple to expand the clip rectangle outward
+   * by the given pixel amounts on each side (negative values inset it).
+   *
    * For WebGL, clipping is implemented using the high-performance WebGL
    * operation scissor. As a consequence, clipping does not work for
    * non-rectangular areas. So, if the element is rotated
@@ -305,7 +309,7 @@ export interface CoreNodeProps {
    *
    * @default `false`
    */
-  clipping: boolean;
+  clipping: boolean | [number, number, number, number];
   /**
    * The color of the Node.
    *
@@ -1366,7 +1370,7 @@ export class CoreNode extends EventEmitter {
         childUpdateType |= UpdateType.Global;
       }
 
-      if (this.clipping === true) {
+      if (this.props.clipping !== false) {
         updateType |= UpdateType.Clipping | UpdateType.RenderBounds;
         childUpdateType |= UpdateType.RenderBounds;
       }
@@ -1669,14 +1673,31 @@ export class CoreNode extends EventEmitter {
     }
 
     // clipping is enabled and we are in bounds create our own bounds
-    const { x, y, w, h } = this.props;
+    const { x, y, w, h, clipping } = this.props;
 
     // Pick the global transform if available, otherwise use the local transform
     // global transform is only available if the node in an RTT chain
     const { tx, ty } = this.sceneGlobalTransform || this.globalTransform || {};
     const _x = tx ?? x;
     const _y = ty ?? y;
-    this.strictBound = createBound(_x, _y, _x + w, _y + h, this.strictBound);
+
+    let mT = 0;
+    let mR = 0;
+    let mB = 0;
+    let mL = 0;
+    if (Array.isArray(clipping) === true) {
+      mT = clipping[0];
+      mR = clipping[1];
+      mB = clipping[2];
+      mL = clipping[3];
+    }
+    this.strictBound = createBound(
+      _x - mL,
+      _y - mT,
+      _x + w + mR,
+      _y + h + mB,
+      this.strictBound,
+    );
 
     this.preloadBound = createPreloadBounds(
       this.strictBound,
@@ -1916,11 +1937,21 @@ export class CoreNode extends EventEmitter {
     const { clipping } = props;
     const isRotated = gt!.tb !== 0 || gt!.tc !== 0;
 
-    if (clipping === true && isRotated === false) {
-      clippingRect.x = gt!.tx;
-      clippingRect.y = gt!.ty;
-      clippingRect.w = this.props.w * gt!.ta;
-      clippingRect.h = this.props.h * gt!.td;
+    if (clipping !== false && isRotated === false) {
+      let mT = 0;
+      let mR = 0;
+      let mB = 0;
+      let mL = 0;
+      if (Array.isArray(clipping) === true) {
+        mT = clipping[0];
+        mR = clipping[1];
+        mB = clipping[2];
+        mL = clipping[3];
+      }
+      clippingRect.x = gt!.tx - mL;
+      clippingRect.y = gt!.ty - mT;
+      clippingRect.w = this.props.w * gt!.ta + mL + mR;
+      clippingRect.h = this.props.h * gt!.td + mT + mB;
       clippingRect.valid = true;
     } else {
       clippingRect.valid = false;
@@ -2421,11 +2452,14 @@ export class CoreNode extends EventEmitter {
     this.setUpdateType(UpdateType.RenderBounds);
   }
 
-  get clipping(): boolean {
+  get clipping(): boolean | [number, number, number, number] {
     return this.props.clipping;
   }
 
-  set clipping(value: boolean) {
+  set clipping(value: boolean | [number, number, number, number]) {
+    if (this.props.clipping === value) {
+      return;
+    }
     this.props.clipping = value;
     this.setUpdateType(
       UpdateType.Clipping | UpdateType.RenderBounds | UpdateType.Children,
