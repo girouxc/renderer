@@ -1113,5 +1113,71 @@ describe('set color()', () => {
 
       expect(node.clippingRect.valid).toBe(false);
     });
+
+    it('shares the invalid default rect when neither node nor ancestor clips', () => {
+      const parent = new CoreNode(stage, defaultProps());
+      parent.globalTransform = Matrix3d.identity();
+      parent.worldAlpha = 1;
+
+      const node = new CoreNode(stage, defaultProps({ parent }));
+      node.alpha = 1;
+      node.setUpdateType(UpdateType.Clipping);
+
+      node.update(0, { x: 0, y: 0, w: 0, h: 0, valid: false });
+
+      // No own allocation: the field still points at the shared default that
+      // every freshly-constructed node starts with.
+      const fresh = new CoreNode(stage, defaultProps());
+      expect(node.clippingRect).toBe(fresh.clippingRect);
+      expect(node.clippingRect.valid).toBe(false);
+    });
+
+    it('never mutates the shared default when a sibling node clips', () => {
+      const clipParent = new CoreNode(stage, defaultProps());
+      clipParent.globalTransform = Matrix3d.identity();
+      clipParent.worldAlpha = 1;
+
+      const clippingNode = new CoreNode(
+        stage,
+        defaultProps({ parent: clipParent }),
+      );
+      clippingNode.worldAlpha = 1;
+      clippingNode.alpha = 1;
+      clippingNode.x = 10;
+      clippingNode.y = 20;
+      clippingNode.w = 30;
+      clippingNode.h = 40;
+      clippingNode.clipping = true;
+      clippingNode.update(0, { x: 0, y: 0, w: 1000, h: 1000, valid: true });
+
+      // A separate non-clipping node must still see a pristine invalid default.
+      const plain = new CoreNode(stage, defaultProps());
+      expect(plain.clippingRect.valid).toBe(false);
+      expect(plain.clippingRect.x).toBe(0);
+      expect(plain.clippingRect.y).toBe(0);
+      expect(plain.clippingRect.w).toBe(0);
+      expect(plain.clippingRect.h).toBe(0);
+    });
+
+    it('allocates its own rect to inherit a valid ancestor clip rect', () => {
+      const parent = new CoreNode(stage, defaultProps());
+      parent.globalTransform = Matrix3d.identity();
+      parent.worldAlpha = 1;
+
+      const node = new CoreNode(stage, defaultProps({ parent }));
+      node.alpha = 1;
+      node.setUpdateType(UpdateType.Clipping);
+
+      const fresh = new CoreNode(stage, defaultProps());
+      node.update(0, { x: 5, y: 6, w: 20, h: 30, valid: true });
+
+      // Now owns a private rect carrying the parent's clip values.
+      expect(node.clippingRect).not.toBe(fresh.clippingRect);
+      expect(node.clippingRect.valid).toBe(true);
+      expect(node.clippingRect.x).toBe(5);
+      expect(node.clippingRect.y).toBe(6);
+      expect(node.clippingRect.w).toBe(20);
+      expect(node.clippingRect.h).toBe(30);
+    });
   });
 });

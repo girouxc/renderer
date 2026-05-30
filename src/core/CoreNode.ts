@@ -808,13 +808,14 @@ export class CoreNode extends EventEmitter {
   public renderBound?: Bound;
   public strictBound?: Bound;
   public preloadBound?: Bound;
-  public clippingRect: RectWithValid = {
-    x: 0,
-    y: 0,
-    w: 0,
-    h: 0,
-    valid: false,
-  };
+  /**
+   * Points at the shared `NO_CLIPPING_RECT` until this node actually
+   * participates in clipping (either it clips, or an ancestor's clip rect
+   * propagates down). Clipping is rare across the scene graph, so most nodes
+   * never allocate their own rect — `calculateClippingRect` swaps in a private
+   * object lazily the first time one is needed.
+   */
+  public clippingRect: RectWithValid = NO_CLIPPING_RECT;
   public textureCoords?: TextureCoords;
   public updateShaderUniforms: boolean = false;
   public isRenderable = false;
@@ -1933,11 +1934,33 @@ export class CoreNode extends EventEmitter {
    * Finally, the node's parentClippingRect and clippingRect properties are updated.
    */
   calculateClippingRect(parentClippingRect: RectWithValid) {
-    const { clippingRect, props, globalTransform: gt } = this;
+    const { props, globalTransform: gt } = this;
     const { clipping } = props;
     const isRotated = gt!.tb !== 0 || gt!.tc !== 0;
+    const nodeClips = clipping !== false && isRotated === false;
 
-    if (clipping !== false && isRotated === false) {
+    // Common case: this node doesn't clip and no ancestor clip rect needs to
+    // propagate. No node-owned rect is required, so point at the shared
+    // invalid default and skip the allocation entirely.
+    if (nodeClips === false && parentClippingRect.valid === false) {
+      this.clippingRect = NO_CLIPPING_RECT;
+      return;
+    }
+
+    // A node-owned, mutable rect is needed. Allocate one lazily the first time
+    // (the default shares NO_CLIPPING_RECT, which must never be written to).
+    let clippingRect = this.clippingRect;
+    if (clippingRect === NO_CLIPPING_RECT) {
+      clippingRect = this.clippingRect = {
+        x: 0,
+        y: 0,
+        w: 0,
+        h: 0,
+        valid: false,
+      };
+    }
+
+    if (nodeClips === true) {
       let mT = 0;
       let mR = 0;
       let mB = 0;
