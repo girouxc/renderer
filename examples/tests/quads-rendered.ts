@@ -1,11 +1,19 @@
 import { type INode } from '@lightningjs/renderer';
 import logo from '../assets/lightning.png';
 import type { ExampleSettings } from '../common/ExampleSettings.js';
+import { waitUntilIdle } from '../common/utils.js';
 
 export async function automation(settings: ExampleSettings) {
   const destroy = await test(settings);
+  // The displayed quad count is driven by the async `renderUpdate` event and
+  // only settles once every image texture / SDF layout has loaded (and the
+  // count text, itself made of quads, has converged). Wait for the renderer to
+  // go idle so the snapshot captures that stable final state instead of a
+  // mid-load frame at a fixed timeout.
+  await waitUntilIdle(settings.renderer);
   await settings.snapshot();
   destroy(120);
+  await waitUntilIdle(settings.renderer);
   await settings.snapshot();
 }
 

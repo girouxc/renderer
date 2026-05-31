@@ -245,8 +245,10 @@ export class CoreTextNode extends CoreNode implements CoreTextNodeProps {
     // Handle Canvas renderer (uses ImageData)
     if (textRendererType === 'canvas') {
       if (result.imageData === undefined) {
-        // Empty text returns no imageData — mark not renderable and continue
+        // Empty text returns no imageData — clear the stale texture so the
+        // previous text doesn't linger, then mark not renderable and continue
         // to update dimensions (w=0, h=0) rather than emitting a failure.
+        this.texture = null;
         this.setRenderable(false);
       } else {
         this.texture = this.stage.txManager.createTexture('ImageTexture', {
