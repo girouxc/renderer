@@ -119,6 +119,18 @@ export class Stage {
    */
   public readonly eventBus: EventEmitter;
 
+  /**
+   * Whether the underlying WebGL context has been lost.
+   *
+   * @remarks
+   * Set by the renderer's `webglcontextlost` listener. Once true it stays true:
+   * the engine does not rebuild GPU resources in-place, so the render loop
+   * stops and the supported recovery is to reload the app (see the `contextLost`
+   * event). This avoids issuing GL calls against a dead context, which return
+   * null/throw on low-RAM devices (e.g. Chromium 123+ backgrounding behaviour).
+   */
+  public isContextLost = false;
+
   /// State
   startTime = 0;
   deltaTime = 0;
@@ -427,6 +439,21 @@ export class Stage {
       time: this.currentFrameTime,
       delta: this.deltaTime,
     });
+  }
+
+  /**
+   * Mark the WebGL context as lost. Stops GL work and notifies consumers.
+   *
+   * @remarks
+   * The engine does not rebuild GPU resources in-place; consumers are expected
+   * to reload the app in response to the `contextLost` event.
+   */
+  setContextLost() {
+    if (this.isContextLost === true) {
+      return;
+    }
+    this.isContextLost = true;
+    this.eventBus.emit('contextLost');
   }
 
   /**

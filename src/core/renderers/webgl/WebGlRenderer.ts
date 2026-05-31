@@ -174,6 +174,8 @@ export class WebGlRenderer extends CoreRenderer {
     const glw = (this.glw = new WebGlContextWrapper(gl));
     glw.viewport(0, 0, options.canvas.width, options.canvas.height);
 
+    this.attachContextLossListeners(options.canvas);
+
     this.updateClearColor(this.stage.clearColor);
 
     glw.setBlend(true);
@@ -298,6 +300,32 @@ export class WebGlRenderer extends CoreRenderer {
         },
       },
     ]);
+  }
+
+  /**
+   * Listen for WebGL context loss on the canvas.
+   *
+   * @remarks
+   * On low-RAM devices (e.g. Chromium 123+ after backgrounding) the GPU
+   * context is dropped, after which `gl.createTexture()` and friends return
+   * null and the engine would crash. We pause the render loop via the Stage
+   * flag and surface a `contextLost` event so consumers can react.
+   *
+   * We intentionally do NOT call `event.preventDefault()` (which would ask the
+   * browser to restore the context) and do NOT listen for
+   * `webglcontextrestored`: the engine cannot rebuild its GPU resources
+   * in-place, so the supported recovery is to reload the app. See BROWSERS.md.
+   */
+  private attachContextLossListeners(
+    canvas: HTMLCanvasElement | OffscreenCanvas,
+  ): void {
+    if ('addEventListener' in canvas === false) {
+      return;
+    }
+    const target = canvas as HTMLCanvasElement;
+    target.addEventListener('webglcontextlost', () => {
+      this.stage.setContextLost();
+    });
   }
 
   reset() {

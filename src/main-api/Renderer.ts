@@ -146,6 +146,28 @@ export interface RendererMainCriticalCleanupFailedEvent {
 }
 
 /**
+ * WebGL Context Lost Event Data
+ *
+ * @remarks
+ * Fired when the underlying WebGL context is lost (e.g. on low-RAM devices
+ * running Chromium 123+ after the app has been backgrounded). The render loop
+ * stops; in-engine GL resources are NOT rebuilt, so the supported handling is
+ * to reload the app.
+ *
+ * @category Events
+ * @example
+ * ```typescript
+ * renderer.on('contextLost', () => {
+ *   window.location.reload();
+ * });
+ * ```
+ */
+export interface RendererMainContextLostEvent {
+  /** This event has no payload - listen without parameters */
+  readonly __eventHasNoPayload?: never;
+}
+
+/**
  * Settings for the Renderer that can be updated during runtime.
  */
 export interface RendererRuntimeSettings {
@@ -506,6 +528,7 @@ export type RendererMainSettings = RendererRuntimeSettings & {
  * @see {@link RendererMainIdleEvent}
  * @see {@link RendererMainCriticalCleanupEvent}
  * @see {@link RendererMainCriticalCleanupFailedEvent}
+ * @see {@link RendererMainContextLostEvent}
  *
  * @fires RendererMain#fpsUpdate
  * @fires RendererMain#frameTick
@@ -513,6 +536,7 @@ export type RendererMainSettings = RendererRuntimeSettings & {
  * @fires RendererMain#idle
  * @fires RendererMain#criticalCleanup
  * @fires RendererMain#criticalCleanupFailed
+ * @fires RendererMain#contextLost
  */
 export class RendererMain extends EventEmitter {
   readonly root: INode;

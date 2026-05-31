@@ -10,6 +10,21 @@ LightningJS relies on **WebGL 1.x** (based on OpenGL ES 2.0) or newer for its re
 - **No CSS Dependency**: Unlike traditional DOM/CSS rendering, LightningJS avoids reliance on CSS features, extensions, or browser-specific CSS implementations.
 - **Consistency**: In our experience, WebGL support is consistent across browsers. Once LightningJS is confirmed to work in a browser, it will deliver uniform output.
 
+## WebGL Context Loss
+
+On low-RAM devices (those with **less than ~1GB of physical RAM**) running **Chromium v123 or newer**, the browser may proactively free the GPU and **lose the WebGL context** when the app is backgrounded for more than ~5 seconds (see [Chromium change 5285836](https://chromium-review.googlesource.com/c/chromium/src/+/5285836)). This is common on Android TV and Fire TV. After a loss, the GPU resources (textures, programs, buffers) are gone and the underlying `gl.*` create calls return `null`.
+
+The renderer detects this via the canvas `webglcontextlost` event. On loss it stops the render loop (so it issues no GL calls against the dead context) and emits a `contextLost` event.
+
+The renderer does **not** rebuild GPU resources in place — it deliberately does not request context restoration. The supported handling is to reload the app on context loss:
+
+```ts
+renderer.on('contextLost', () => {
+  // GPU state is gone — the simplest reliable recovery is a reload.
+  window.location.reload();
+});
+```
+
 ## Supported Browsers and Quirks
 
 Below is a detailed breakdown of confirmed browsers that work with LightningJS, along with the quirks or features specific to their versions:

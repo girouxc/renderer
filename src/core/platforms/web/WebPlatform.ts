@@ -32,6 +32,13 @@ export class WebPlatform extends Platform {
     const buffer = 4;
 
     const runLoop = (currentTime: number = 0) => {
+      // The GL context is lost and the engine does not rebuild it in place.
+      // Stop the loop entirely (no reschedule) so we issue no GL calls against
+      // a dead context. Recovery is via app reload (see the `contextLost` event).
+      if (stage.isContextLost === true) {
+        return;
+      }
+
       const targetFrameTime = stage.targetFrameTime;
 
       // Frame Limiting logic
