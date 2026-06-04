@@ -12,6 +12,7 @@ import { UpdateType } from '../CoreNode.js';
 import { hasZeroWidthSpace } from './Utils.js';
 import { normalizeFontMetrics } from './TextLayoutEngine.js';
 import { isProductionEnvironment } from '../../utils.js';
+import type { TextureError } from '../TextureError.js';
 
 /**
  * SDF Font Data structure matching msdf-bmfont-xml output
@@ -397,7 +398,11 @@ export const loadFont = (
         resolve();
       });
 
-      atlasTexture.on('failed', (error: Error) => {
+      // EventEmitter invokes listeners as (target, data), so the error payload
+      // is the SECOND argument. The first arg is the Texture that emitted the
+      // event. Reading it as the only param (the previous behavior) rejected
+      // and logged the Texture instead of the actual TextureError.
+      atlasTexture.on('failed', (_target, error: TextureError) => {
         // Cleanup on error
         fontLoadPromises.delete(fontFamily);
         if (fontCache[fontFamily]) {
