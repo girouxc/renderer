@@ -86,6 +86,7 @@ export class WebPlatform extends Platform {
             stage.txMemManager.handleOutOfMemory();
           }
           stage.shManager.cleanup();
+          stage.cleanupTextRenderers();
           stage.eventBus.emit('idle');
           isIdle = true;
         }

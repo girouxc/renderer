@@ -435,6 +435,13 @@ export interface TextRenderer {
     renderProps: TextRenderProps,
   ) => void | SdfRenderOp | null;
   init: (stage: Stage) => void;
+  /**
+   * Trim internal caches back down to their configured limits.
+   * Called when the stage goes idle so cache eviction never competes with
+   * active rendering. Backends with no bounded cache may implement this as a
+   * no-op.
+   */
+  cleanup: () => void;
 }
 
 /**

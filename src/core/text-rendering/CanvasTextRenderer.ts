@@ -40,9 +40,21 @@ const layoutCache = new Map<
   }
 >();
 
+// Upper bound on layoutCache entries, enforced on idle via `cleanup`.
+// Overridden from stage options in `init`. Note: the Canvas path does not
+// currently populate `layoutCache`, so this is effectively inert today and
+// exists to keep the eviction policy uniform with the SDF backend should
+// Canvas layout caching be wired up later.
+let maxLayoutCacheSize = 250;
+
 // Initialize the Text Renderer
 const init = (stage: Stage): void => {
   const dpr = stage.options.devicePhysicalPixelRatio;
+
+  const configuredCacheSize = stage.options.textLayoutCacheSize;
+  if (configuredCacheSize !== undefined) {
+    maxLayoutCacheSize = configuredCacheSize;
+  }
 
   // Drawing canvas and context
   canvas = stage.platform.createCanvas() as HTMLCanvasElement | OffscreenCanvas;
@@ -225,6 +237,19 @@ const clearLayoutCache = (): void => {
 };
 
 /**
+ * Trim the layout cache back down to `maxLayoutCacheSize`, evicting the
+ * least-recently-used entries first. Called when the stage goes idle. The
+ * Canvas path does not currently populate `layoutCache`, so this is a no-op in
+ * practice today; it mirrors the SDF backend's eviction policy.
+ */
+const cleanup = (): void => {
+  while (layoutCache.size > maxLayoutCacheSize) {
+    const oldest = layoutCache.keys().next().value as string;
+    layoutCache.delete(oldest);
+  }
+};
+
+/**
  * Add quads for rendering (Canvas doesn't use quads)
  */
 const addQuads = (): Float32Array | null => {
@@ -252,6 +277,7 @@ const CanvasTextRenderer = {
   renderQuads,
   init,
   clearLayoutCache,
+  cleanup,
 };
 
 export default CanvasTextRenderer;

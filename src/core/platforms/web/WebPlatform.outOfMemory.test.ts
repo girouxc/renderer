@@ -19,6 +19,7 @@ function makeIdleStage(outOfMemory: boolean) {
     drawFrame: vi.fn(),
     flushFrameEvents: vi.fn(),
     shManager: { cleanup: vi.fn() },
+    cleanupTextRenderers: vi.fn(),
     eventBus: { emit: vi.fn() },
     txMemManager: {
       checkCleanup: vi.fn(() => false),

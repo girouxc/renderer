@@ -510,6 +510,19 @@ export class Stage {
   }
 
   /**
+   * Trim text renderer caches back to their configured limits.
+   *
+   * Called when the stage goes idle so layout-cache eviction never competes
+   * with active rendering.
+   */
+  cleanupTextRenderers() {
+    const textRenderers = this.textRenderers;
+    for (const key in textRenderers) {
+      textRenderers[key]!.cleanup();
+    }
+  }
+
+  /**
    * Start a new frame draw
    */
   drawFrame(hasActiveAnimations: boolean = false) {

@@ -24,9 +24,19 @@ const type = 'sdf' as const;
 
 let sdfShader: WebGlShaderNode | null = null;
 
+// Upper bound on layoutCache entries, enforced on idle via `cleanup`.
+// Overridden from stage options in `init`. The cache is allowed to grow past
+// this during active rendering and is trimmed back to it when the stage idles.
+let maxLayoutCacheSize = 250;
+
 // Initialize the SDF text renderer
 const init = (stage: Stage): void => {
   SdfFontHandler.init();
+
+  const configuredCacheSize = stage.options.textLayoutCacheSize;
+  if (configuredCacheSize !== undefined) {
+    maxLayoutCacheSize = configuredCacheSize;
+  }
 
   // Register SDF shader with the shader manager
   stage.shManager.registerShaderType('Sdf', Sdf);
@@ -58,6 +68,11 @@ const renderText = (props: CoreTextNodeProps): TextRenderInfo => {
   const cacheKey = getLayoutCacheKey(props);
   let layout = layoutCache.get(cacheKey);
   if (layout !== undefined) {
+    // Refresh LRU recency: re-insert moves the key to the most-recently-used
+    // end so idle `cleanup` evicts genuinely cold entries first. renderText
+    // runs on text/layout change, not per frame, so this re-insert is cheap.
+    layoutCache.delete(cacheKey);
+    layoutCache.set(cacheKey, layout);
     return {
       remainingLines: 0,
       hasRemainingText: false,
@@ -358,6 +373,20 @@ const generateTextLayout = (
 };
 
 /**
+ * Trim the layout cache back down to `maxLayoutCacheSize`, evicting the
+ * least-recently-used entries first. Called when the stage goes idle so this
+ * never competes with active rendering. A fresh iterator is taken each step so
+ * we always delete the current front (oldest) key without iterator-invalidation
+ * concerns; this runs at most once per idle transition and only when over cap.
+ */
+const cleanup = (): void => {
+  while (layoutCache.size > maxLayoutCacheSize) {
+    const oldest = layoutCache.keys().next().value as string;
+    layoutCache.delete(oldest);
+  }
+};
+
+/**
  * SDF Text Renderer - implements TextRenderer interface
  */
 const SdfTextRenderer = {
@@ -367,6 +396,7 @@ const SdfTextRenderer = {
   addQuads,
   renderQuads,
   init,
+  cleanup,
 };
 
 export default SdfTextRenderer;
