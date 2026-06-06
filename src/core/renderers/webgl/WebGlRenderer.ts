@@ -14,10 +14,6 @@ import { SdfRenderOp } from './SdfRenderOp.js';
 import type { CoreContextTexture } from '../CoreContextTexture.js';
 import {
   createIndexBuffer,
-  type CoreWebGlParameters,
-  type CoreWebGlExtensions,
-  getWebGlParameters,
-  getWebGlExtensions,
   type WebGlColor,
 } from './internal/RendererUtils.js';
 import { WebGlCtxTexture } from './WebGlCtxTexture.js';
@@ -51,17 +47,11 @@ const GL_OUT_OF_MEMORY = 0x0505;
  */
 const MAX_DRAINED_GL_ERRORS = 8;
 
-interface CoreWebGlSystem {
-  parameters: CoreWebGlParameters;
-  extensions: CoreWebGlExtensions;
-}
-
 export type WebGlRenderOp = CoreNode | SdfRenderOp;
 
 export class WebGlRenderer extends CoreRenderer {
   //// WebGL Native Context and Data
   glw: WebGlContextWrapper;
-  system: CoreWebGlSystem;
 
   //// Persistent data
   quadBuffer: ArrayBuffer;
@@ -191,11 +181,6 @@ export class WebGlRenderer extends CoreRenderer {
     glw.blendFunc(glw.ONE, glw.ONE_MINUS_SRC_ALPHA);
 
     createIndexBuffer(glw, this.stage.bufferMemory);
-
-    this.system = {
-      parameters: getWebGlParameters(this.glw),
-      extensions: getWebGlExtensions(this.glw),
-    };
 
     // Create the static node coords buffer
     // 80 is the magic number used in createIndexBuffer

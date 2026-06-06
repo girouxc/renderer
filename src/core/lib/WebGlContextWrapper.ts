@@ -95,55 +95,39 @@ export class WebGlContextWrapper {
   //#endregion WebGL Enums
 
   constructor(private gl: WebGLRenderingContext | WebGL2RenderingContext) {
-    // The following code extracts the current state of the WebGL context
-    // to our local JavaScript cached version of it. This is so we can
-    // avoid making WebGL calls if we don't need to.
-    // We could assume that the WebGL context is in a default state, but
-    // in the future we may want to support restoring a broken WebGL context
-    // and this will help with that.
-    this.activeTextureUnit =
-      (gl.getParameter(gl.ACTIVE_TEXTURE) as number) - gl.TEXTURE0;
+    // A freshly created WebGL context is in a fully specified default state.
+    // Rather than reading that state back with getParameter/isEnabled — each a
+    // synchronous CPU<->GPU round-trip, and previously ~one per texture unit
+    // (16-32) just to enumerate the bindings — we seed the cache with those
+    // known defaults. The engine never restores a lost context in place (it
+    // reloads the app on `contextLost`), so there is no live state to recover.
+    this.activeTextureUnit = 0;
     const maxTextureUnits = gl.getParameter(
       gl.MAX_TEXTURE_IMAGE_UNITS,
     ) as number;
-    // save current texture units
-    this.texture2dUnits = new Array<undefined>(maxTextureUnits)
-      .fill(undefined)
-      .map((_, i) => {
-        this.activeTexture(i);
-        return gl.getParameter(gl.TEXTURE_BINDING_2D) as WebGLTexture;
-      });
-    // restore active texture unit
-    this.activeTexture(this.activeTextureUnit);
-    this.scissorEnabled = gl.isEnabled(gl.SCISSOR_TEST);
+    // All texture units start unbound (TEXTURE_BINDING_2D === null).
+    this.texture2dUnits = new Array<WebGLTexture | null>(maxTextureUnits).fill(
+      null,
+    );
 
-    const scissorBox = gl.getParameter(gl.SCISSOR_BOX) as [
-      number,
-      number,
-      number,
-      number,
-    ];
-    this.scissorX = scissorBox[0];
-    this.scissorY = scissorBox[1];
-    this.scissorWidth = scissorBox[2];
-    this.scissorHeight = scissorBox[3];
+    // SCISSOR_TEST disabled; SCISSOR_BOX defaults to the full drawing buffer.
+    this.scissorEnabled = false;
+    this.scissorX = 0;
+    this.scissorY = 0;
+    this.scissorWidth = gl.drawingBufferWidth;
+    this.scissorHeight = gl.drawingBufferHeight;
 
-    this.blendEnabled = gl.isEnabled(gl.BLEND);
-    this.blendSrcRgb = gl.getParameter(gl.BLEND_SRC_RGB) as number;
-    this.blendDstRgb = gl.getParameter(gl.BLEND_DST_RGB) as number;
-    this.blendSrcAlpha = gl.getParameter(gl.BLEND_SRC_ALPHA) as number;
-    this.blendDstAlpha = gl.getParameter(gl.BLEND_DST_ALPHA) as number;
+    // BLEND disabled; blend func defaults to (ONE, ZERO) for both RGB and alpha.
+    this.blendEnabled = false;
+    this.blendSrcRgb = gl.ONE;
+    this.blendDstRgb = gl.ZERO;
+    this.blendSrcAlpha = gl.ONE;
+    this.blendDstAlpha = gl.ZERO;
 
-    this.boundArrayBuffer = gl.getParameter(
-      gl.ARRAY_BUFFER_BINDING,
-    ) as WebGLBuffer;
-    this.boundElementArrayBuffer = gl.getParameter(
-      gl.ELEMENT_ARRAY_BUFFER_BINDING,
-    ) as WebGLBuffer;
-
-    this.curProgram = gl.getParameter(
-      gl.CURRENT_PROGRAM,
-    ) as WebGLProgram | null;
+    // No buffers or program bound on a fresh context.
+    this.boundArrayBuffer = null;
+    this.boundElementArrayBuffer = null;
+    this.curProgram = null;
 
     this.canvas = gl.canvas;
 

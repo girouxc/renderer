@@ -1,16 +1,25 @@
 import type { ExampleSettings } from '../common/ExampleSettings.js';
+import { waitUntilIdle } from '../common/utils.js';
 import type { CoreTextNode } from '../../dist/src/core/CoreTextNode.js';
 import type { INode } from '../../dist/exports/index.js';
 
 export async function automation(settings: ExampleSettings) {
   const page = await test(settings);
+
+  // The bottom status text is written from the renderer's `idle` handler, once
+  // each node's `renderState` has settled and the updated text has re-rendered.
+  // Capturing at a fixed timeout races that update, so wait for idle before
+  // each snapshot to record the stable final frame instead of a mid-settle one.
   page(1);
+  await waitUntilIdle(settings.renderer);
   await settings.snapshot();
 
   page(2);
+  await waitUntilIdle(settings.renderer);
   await settings.snapshot();
 
   page(3);
+  await waitUntilIdle(settings.renderer);
   await settings.snapshot();
 }
 
@@ -83,10 +92,6 @@ export default async function test({ renderer, testRoot }: ExampleSettings) {
 
     if (e.key === 'ArrowLeft') {
       containerNode.x += 100;
-    }
-
-    if (e.key === ' ') {
-      containerNode.strictBounds = !containerNode.strictBounds;
     }
 
     if (e.key === 'ArrowUp') {
