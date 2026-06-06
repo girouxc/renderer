@@ -19,12 +19,6 @@ interface CanvasFont {
   metrics?: FontMetrics;
 }
 
-/**
- * Global font set regardless of if run in the main thread or a web worker
- */
-// const globalFontSet: FontFaceSet = (resolvedGlobal.document?.fonts ||
-//   (resolvedGlobal as unknown as { fonts: FontFaceSet }).fonts) as FontFaceSet;
-
 // Global state variables for fontHandler
 const fontFamilies: Record<string, FontFace> = {};
 const fontLoadPromises = new Map<string, Promise<void>>();

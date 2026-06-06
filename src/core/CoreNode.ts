@@ -225,14 +225,12 @@ export interface CoreNodeProps {
   y: number;
   /**
    * The width of the Node.
-   * @warning This will be deprecated in favor of `w` and `h` properties in the future.
    *
    * @default `0`
    */
   w: number;
   /**
    * The height of the Node.
-   * @warning This will be deprecated in favor of `w` and `h` properties in the future.
    *
    * @default `0`
    */
@@ -743,7 +741,6 @@ export interface CoreNodeAnimateProps extends NumberProps<CoreNodeProps> {
    * Shader properties to animate
    */
   shaderProps: Record<string, number>;
-  // TODO: textureProps: Record<string, number>;
 }
 
 /**
