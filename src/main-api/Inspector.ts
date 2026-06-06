@@ -230,6 +230,11 @@ const knownProperties = new Set<string>([
   'parent',
   'data',
   'text',
+  'texture',
+  'rtt',
+  'mount',
+  'mountX',
+  'mountY',
   'componentName',
   'componentLocation',
 ]);
@@ -293,6 +298,10 @@ export class Inspector {
   private scaleX = 1;
   private scaleY = 1;
   private textureMetrics = new Map<Texture, TextureMetrics>();
+  // Stable reference so the same function can be passed to both
+  // add/removeEventListener — `.bind()` returns a new fn each call, so binding
+  // inline in destroy() would never actually remove the listener.
+  private boundSetRootPosition = this.setRootPosition.bind(this);
 
   // Performance monitoring for frequent setter calls
   private static setterCallCount = new Map<
@@ -393,7 +402,7 @@ export class Inspector {
     this.resizeObserver.observe(canvas);
 
     //listen for changes on window
-    window.addEventListener('resize', this.setRootPosition.bind(this));
+    window.addEventListener('resize', this.boundSetRootPosition);
 
     // Start animation stats timer if enabled
     this.startAnimationStatsTimer();
@@ -1033,7 +1042,7 @@ export class Inspector {
         });
         coreNodeListeners.clear();
 
-        this.destroyNode(node.id);
+        this.destroyNode(node);
         originalDestroy.call(node, isChild);
       },
       configurable: true,
@@ -1151,7 +1160,7 @@ export class Inspector {
     this.resizeObserver.disconnect();
 
     // Remove resize listener
-    window.removeEventListener('resize', this.setRootPosition.bind(this));
+    window.removeEventListener('resize', this.boundSetRootPosition);
     if (this.root && this.root.parentNode) {
       this.root.remove();
     }
@@ -1160,8 +1169,11 @@ export class Inspector {
     Inspector.clearAnimationStats();
   }
 
-  destroyNode(id: number) {
-    const div = document.getElementById(id.toString());
+  destroyNode(node: CoreNode) {
+    // Use the mirror div stored on the node rather than a document-global
+    // getElementById, which would collide across multiple renderer/inspector
+    // instances sharing one document.
+    const div = (node as CoreNode & { div?: HTMLElement }).div;
     div?.remove();
   }
 
@@ -1180,23 +1192,41 @@ export class Inspector {
      * Special case for parent property
      */
     if (property === 'parent') {
-      const parentId: number = value.id;
+      // value is the parent CoreNode. Its mirror div is stored on the node
+      // itself (see createNode/createTextNode), so use that reference instead
+      // of a document-global getElementById — the latter collides across
+      // multiple renderer/inspector instances sharing one document.
+      //
+      // The stage root (the only node with parent === null) is mirrored by
+      // `this.root`, the container that is actually attached to the document.
+      // createNodes() also makes a plain div for the root node, but that div is
+      // never attached, so the root's direct children must be parented to
+      // `this.root` instead — otherwise the whole mirror tree ends up detached
+      // from the document. This replaces the old `parentId === 1` heuristic.
+      const parentNode = value as CoreNode & { div?: HTMLElement };
+      const parentDiv =
+        parentNode.parent === null ? this.root : parentNode.div ?? this.root;
+      parentDiv.appendChild(div);
+      return;
+    }
 
-      // only way to detect if the parent is the root node
-      // if you are reading this and have a better way, please let me know
-      if (parentId === 1) {
-        this.root.appendChild(div);
-        return;
-      }
-
-      const parent = document.getElementById(parentId.toString());
-      parent?.appendChild(div);
+    // special case for mount changes — mount has no CSS equivalent, but it
+    // shifts the node's left/top, so recompute position from the latest props.
+    if (
+      property === 'mount' ||
+      property === 'mountX' ||
+      property === 'mountY'
+    ) {
+      div.style.left = `${props.x - props.w * (props.mountX ?? 0)}px`;
+      div.style.top = `${props.y - props.h * (props.mountY ?? 0)}px`;
       return;
     }
 
     // special case for text
     if (property === 'text') {
-      div.innerHTML = String(value);
+      // textContent (not innerHTML): text may contain <, &, etc. which would
+      // corrupt the mirror tree or act as an injection vector via innerHTML.
+      div.textContent = String(value);
 
       // Keep DOM text invisible without breaking visibility checks
       // Use very low opacity (0.001) instead of 0 so Playwright still detects it

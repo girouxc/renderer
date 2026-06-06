@@ -928,7 +928,7 @@ export class RendererMain extends EventEmitter {
    */
   destroyNode(node: INode) {
     if (ENABLE_INSPECTOR && this.inspector) {
-      this.inspector.destroyNode(node.id);
+      this.inspector.destroyNode(node as unknown as CoreNode);
     }
 
     return node.destroy();
