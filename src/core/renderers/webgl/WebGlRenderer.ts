@@ -644,7 +644,8 @@ export class WebGlRenderer extends CoreRenderer {
    * SdfRenderOp, resulting in one draw call for many text nodes.
    */
   addSdfQuads(
-    glyphs: import('../../text-rendering/TextRenderer.js').GlyphLayout[],
+    glyphs: Float32Array,
+    glyphCount: number,
     fontScale: number,
     transform: Float32Array,
     color: number,
@@ -660,7 +661,6 @@ export class WebGlRenderer extends CoreRenderer {
       | null,
     sdfShader: WebGlShaderNode,
   ): void {
-    const glyphCount = glyphs.length;
     if (glyphCount === 0) {
       return;
     }
@@ -696,20 +696,21 @@ export class WebGlRenderer extends CoreRenderer {
     // Record start quad for this batch segment
     const startQuad = this.sdfQuadCount;
 
+    // Read packed glyph fields directly from the Float32Array (stride = 8).
+    let go = 0;
     for (let gi = 0; gi < glyphCount; gi++) {
-      const glyph = glyphs[gi]!;
-
       // Glyph corners in design units
-      const gx1 = glyph.x;
-      const gy1 = glyph.y;
-      const gx2 = gx1 + glyph.width;
-      const gy2 = gy1 + glyph.height;
+      const gx1 = glyphs[go]!;
+      const gy1 = glyphs[go + 1]!;
+      const gx2 = gx1 + glyphs[go + 2]!;
+      const gy2 = gy1 + glyphs[go + 3]!;
 
       // Atlas UVs
-      const u1 = glyph.atlasX;
-      const v1 = glyph.atlasY;
-      const u2 = u1 + glyph.atlasWidth;
-      const v2 = v1 + glyph.atlasHeight;
+      const u1 = glyphs[go + 4]!;
+      const v1 = glyphs[go + 5]!;
+      const u2 = u1 + glyphs[go + 6]!;
+      const v2 = v1 + glyphs[go + 7]!;
+      go += 8;
 
       // Transform to world space
       // Note: we use gx/y directly since m0,m1,m3,m4 are already pre-scaled

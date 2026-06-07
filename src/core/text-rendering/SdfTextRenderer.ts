@@ -14,7 +14,7 @@ import { Sdf } from '../shaders/webgl/SdfShader.js';
 import type { WebGlCtxTexture } from '../renderers/webgl/WebGlCtxTexture.js';
 import type { WebGlShaderNode } from '../renderers/webgl/WebGlShaderNode.js';
 import { isProductionEnvironment } from '../../utils.js';
-import type { TextLayout, GlyphLayout } from './TextRenderer.js';
+import { SDF_GLYPH_STRIDE, type TextLayout } from './TextRenderer.js';
 import { mapTextLayout } from './TextLayoutEngine.js';
 import type { RectWithValid } from '../lib/utils.js';
 import type { Dimensions } from '../../common/CommonTypes.js';
@@ -197,6 +197,7 @@ const renderQuads = (
   const startIdx = webGlRenderer.sdfBufferIdx;
   webGlRenderer.addSdfQuads(
     layout.glyphs,
+    layout.glyphCount,
     layout.fontScale,
     renderProps.globalTransform,
     renderProps.color,
@@ -221,7 +222,7 @@ const renderQuads = (
         cache.vertices = new Float32Array(len);
       }
       cache.vertices.set(webGlRenderer.fSdfBuffer.subarray(startIdx, endIdx));
-      cache.glyphCount = layout.glyphs.length;
+      cache.glyphCount = layout.glyphCount;
       cache.color = renderProps.color;
       cache.alpha = renderProps.worldAlpha;
       cache.layoutRef = layout;
@@ -303,7 +304,19 @@ const generateTextLayout = (
 
   const lineAmount = lines.length;
 
-  const glyphs: GlyphLayout[] = [];
+  // Upper bound on glyph slots = total chars across all lines. Surrogate pairs
+  // and skipped codepoints (zero-width / missing) may leave the tail of this
+  // buffer unused; the real count is tracked in `glyphCount`.
+  let maxGlyphs = 0;
+  for (let i = 0; i < lineAmount; i++) {
+    maxGlyphs += (lines[i] as TextLineStruct)[0].length;
+  }
+
+  // Packed glyph buffer: SDF_GLYPH_STRIDE floats per glyph. One Float32Array
+  // replaces what used to be one object literal per glyph.
+  const glyphs = new Float32Array(maxGlyphs * SDF_GLYPH_STRIDE);
+  let glyphIdx = 0;
+  let glyphCount = 0;
   let currentX = 0;
   let baselineY = 0;
   for (let i = 0; i < lineAmount; i++) {
@@ -361,18 +374,16 @@ const generateTextLayout = (
       // BMFont line-box top; subtracting atlasBase re-anchors it relative to
       // the alphabetic baseline so fonts with different BMFont 'base' values
       // share the same on-screen baseline.
-      const glyphLayout: GlyphLayout = {
-        x: currentX + glyph.xoffset,
-        y: baselineY + glyph.yoffset - atlasBase,
-        width: glyph.width,
-        height: glyph.height,
-        atlasX: glyph.x * invAtlasWidth,
-        atlasY: glyph.y * invAtlasHeight,
-        atlasWidth: glyph.width * invAtlasWidth,
-        atlasHeight: glyph.height * invAtlasHeight,
-      };
-
-      glyphs.push(glyphLayout);
+      glyphs[glyphIdx] = currentX + glyph.xoffset;
+      glyphs[glyphIdx + 1] = baselineY + glyph.yoffset - atlasBase;
+      glyphs[glyphIdx + 2] = glyph.width;
+      glyphs[glyphIdx + 3] = glyph.height;
+      glyphs[glyphIdx + 4] = glyph.x * invAtlasWidth;
+      glyphs[glyphIdx + 5] = glyph.y * invAtlasHeight;
+      glyphs[glyphIdx + 6] = glyph.width * invAtlasWidth;
+      glyphs[glyphIdx + 7] = glyph.height * invAtlasHeight;
+      glyphIdx += SDF_GLYPH_STRIDE;
+      glyphCount++;
 
       // Advance position with letter spacing (in design units)
       currentX += glyph.xadvance + letterSpacing;
@@ -383,6 +394,7 @@ const generateTextLayout = (
   // Convert final dimensions to pixel space for the layout
   return {
     glyphs,
+    glyphCount,
     distanceRange: fontScale * fontData.distanceField.distanceRange,
     width: effectiveWidth * fontScale,
     height: effectiveHeight,

@@ -291,27 +291,37 @@ export interface TrProps extends TrFontProps {
 }
 
 /**
- * Glyph layout information for WebGL rendering
+ * Number of Float32 entries per glyph in a packed {@link TextLayout.glyphs}
+ * buffer. The per-glyph fields are stored contiguously in this order:
+ *
+ * ```
+ * [0] x            [4] atlasX
+ * [1] y            [5] atlasY
+ * [2] width        [6] atlasWidth
+ * [3] height       [7] atlasHeight
+ * ```
+ *
+ * Glyph `i` occupies `glyphs[i * SDF_GLYPH_STRIDE .. +SDF_GLYPH_STRIDE]`.
+ * A flat typed array (instead of an array of `{x, y, ...}` objects) avoids
+ * allocating one object per glyph on every layout generation.
  */
-export interface GlyphLayout {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  atlasX: number;
-  atlasY: number;
-  atlasWidth: number;
-  atlasHeight: number;
-}
+export const SDF_GLYPH_STRIDE = 8;
 
 /**
  * Complete text layout information for caching
  */
 export interface TextLayout {
   /**
-   * Individual glyph layouts
+   * Packed glyph layout data — `SDF_GLYPH_STRIDE` floats per glyph.
+   * Valid entries cover the first `glyphCount * SDF_GLYPH_STRIDE` slots; the
+   * backing buffer may be slightly larger when codepoints are skipped during
+   * layout (zero-width spaces, missing glyphs).
    */
-  glyphs: GlyphLayout[];
+  glyphs: Float32Array;
+  /**
+   * Number of glyphs packed into {@link glyphs}.
+   */
+  glyphCount: number;
   /**
    * Total text width
    */
