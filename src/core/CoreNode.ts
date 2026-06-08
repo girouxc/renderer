@@ -63,6 +63,11 @@ const NO_CLIPPING_RECT: RectWithValid = {
   valid: false,
 };
 
+// Hoisted so `sortChildren` doesn't allocate a fresh comparator closure on
+// every z-index reorder.
+const compareZIndex = (a: CoreNode, b: CoreNode): number =>
+  a.props.zIndex - b.props.zIndex;
+
 const CoreNodeRenderStateMap: Map<CoreNodeRenderState, string> = new Map();
 CoreNodeRenderStateMap.set(CoreNodeRenderState.Init, 'init');
 CoreNodeRenderStateMap.set(CoreNodeRenderState.OutOfBounds, 'outOfBounds');
@@ -2078,7 +2083,7 @@ export class CoreNode extends EventEmitter {
   }
 
   sortChildren() {
-    this.children.sort((a, b) => a.props.zIndex - b.props.zIndex);
+    this.children.sort(compareZIndex);
     this.stage.requestRenderListUpdate();
   }
 

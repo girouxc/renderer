@@ -12,7 +12,10 @@ import {
   CoreNodeRenderState,
   type CoreNodeProps,
 } from './CoreNode.js';
-import { CoreTextureManager } from './CoreTextureManager.js';
+import {
+  CoreTextureManager,
+  type TextureOptions,
+} from './CoreTextureManager.js';
 import { CoreShaderManager } from './CoreShaderManager.js';
 import {
   type FontHandler,
@@ -71,6 +74,14 @@ export type StageFrameTickHandler = (
 ) => void;
 
 const autoStart = true;
+
+/**
+ * Shared, frozen default for `textureOptions`. Most nodes never set texture
+ * options, so resolving the default to one immutable shared object avoids
+ * allocating an empty `{}` per node. `textureOptions` is only ever read or
+ * replaced wholesale (never mutated in place), so sharing is safe.
+ */
+const EMPTY_TEXTURE_OPTIONS: TextureOptions = Object.freeze({});
 
 export class Stage {
   /// Module Instances
@@ -374,7 +385,7 @@ export class Stage {
       rotation: 0,
       parent: null,
       texture: null,
-      textureOptions: {},
+      textureOptions: EMPTY_TEXTURE_OPTIONS,
       shader: this.defShaderNode,
       rtt: false,
       src: null,
@@ -1018,7 +1029,7 @@ export class Stage {
       zIndex: props.zIndex ?? 0,
       parent: props.parent ?? null,
       texture: props.texture ?? null,
-      textureOptions: props.textureOptions ?? {},
+      textureOptions: props.textureOptions ?? EMPTY_TEXTURE_OPTIONS,
       shader: props.shader ?? this.defShaderNode,
       src: props.src ?? null,
       srcHeight: props.srcHeight,
