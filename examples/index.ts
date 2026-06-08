@@ -111,6 +111,76 @@ const defaultPhysicalPixelRatio = 1;
   console.error(err);
 });
 
+/**
+ * Live on-screen stats overlay for device debugging (`?debug=true`).
+ *
+ * @remarks
+ * Driven entirely by the `fpsUpdate` event so it works without DevTools — handy
+ * on TVs. Surfaces fps + draw calls + quads, the backend/VAO status from
+ * `capabilities`, and the per-interval GL call counts. The VAO signal lives in
+ * the GL counts: with VAOs engaged, `vertexAttribPointer` / `enableVertexAttribArray`
+ * stay ~0 (only spent building a VAO) while `bindVertexArray` tracks the draw count.
+ */
+function createDebugOverlay(renderer: RendererMain): void {
+  renderer.createNode({
+    x: 0,
+    y: 0,
+    w: 600,
+    h: 168,
+    color: 0x000000cc,
+    zIndex: 100000,
+    parent: renderer.root,
+  });
+
+  const text = renderer.createTextNode({
+    x: 14,
+    y: 10,
+    w: 580,
+    contain: 'width',
+    color: 0x33ff88ff,
+    fontSize: 26,
+    lineHeight: 30,
+    zIndex: 100001,
+    text: 'debug: waiting for fpsUpdate…',
+    parent: renderer.root,
+  });
+
+  renderer.on('fpsUpdate', (_target: RendererMain, d: FpsUpdatePayload) => {
+    const c = d.capabilities;
+    const spy = d.contextSpyData;
+    const backend =
+      c.renderMode === 'webgl' ? `webgl${c.webGlVersion ?? ''}` : c.renderMode;
+
+    const lines = [
+      `FPS ${d.fps}   draws ${d.renderOps}   quads ${d.quads}`,
+      `${backend}  VAO:${c.vertexArrayObject === true ? 'on' : 'off'}  tex ${
+        c.maxTextureSize
+      }/${c.maxTextureUnits}`,
+    ];
+
+    if (spy !== null) {
+      let total = 0;
+      for (const key in spy) {
+        total += spy[key]!;
+      }
+      const at = (k: string): number => spy[k] ?? 0;
+      lines.push(`GL calls/interval: ${total}`);
+      lines.push(
+        `vAttribPtr ${at('vertexAttribPointer')}  enaVAA ${at(
+          'enableVertexAttribArray',
+        )}`,
+      );
+      lines.push(
+        `bindVAO ${at('bindVertexArray')}  drawElem ${at(
+          'drawElements',
+        )}  prog ${at('useProgram')}`,
+      );
+    }
+
+    text.text = lines.join('\n');
+  });
+}
+
 async function runTest(
   test: string,
   renderMode: string,
@@ -134,11 +204,16 @@ async function runTest(
 
   const module = await testModule();
 
+  // `?debug=true` shows a live on-screen stats overlay. It needs periodic
+  // fpsUpdate events and the context spy (for GL call counts), so force them on.
+  const debug = urlParams.get('debug') === 'true';
+
   const customSettings: Partial<RendererMainSettings> = {
     ...(typeof module.customSettings === 'function'
       ? module.customSettings(urlParams)
       : {}),
     ...(globalTargetFPS !== undefined && { targetFPS: globalTargetFPS }),
+    ...(debug && { enableContextSpy: true, fpsUpdateInterval: 500 }),
   };
 
   const { renderer, appElement } = await initRenderer(
@@ -214,6 +289,13 @@ async function runTest(
   };
 
   await module.default(exampleSettings);
+
+  // Created last so the overlay's nodes are appended after the test content and
+  // stay on top (a high zIndex alone isn't enough — appending zIndex-0 content
+  // after the overlay does not always re-sort the root's children).
+  if (debug) {
+    createDebugOverlay(renderer);
+  }
 }
 
 async function initRenderer(
