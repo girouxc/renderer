@@ -138,6 +138,13 @@ function createDebugOverlay(renderer: RendererMain): void {
     w: 580,
     contain: 'width',
     color: 0x33ff88ff,
+    // Use SDF (shared atlas) rather than the Canvas text renderer. This overlay
+    // rewrites its text every interval; the Canvas renderer rasterizes a fresh
+    // ImageTexture (a full bitmap) on every text change, which on a long-running
+    // session leaks memory and can OOM low-RAM devices (black screen). SDF draws
+    // changing text from the atlas with no per-update texture allocation.
+    fontFamily: 'Ubuntu',
+    textRendererOverride: 'sdf',
     fontSize: 26,
     lineHeight: 30,
     zIndex: 100001,

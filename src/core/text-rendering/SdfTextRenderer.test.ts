@@ -97,21 +97,22 @@ describe('SdfTextRenderer layout cache', () => {
     expect(SdfFontHandler.getFontData).toHaveBeenCalledTimes(1);
   });
 
-  it('cleanup trims to the cap and evicts least-recently-used first', () => {
+  it('eagerly bounds the cache on insert (does not wait for idle cleanup)', () => {
+    // An animating scene never goes idle, so the cache must be bounded on insert
+    // rather than relying solely on idle `cleanup`. With cap 2, inserting a 3rd
+    // entry must immediately evict the least-recently-used (oldest) one — 'A'.
     initRenderer(2);
 
-    render('A');
-    render('B');
-    render('C');
-    // Re-access 'A' so it becomes most-recently-used; 'B' is now the LRU.
-    render('A');
-
-    SdfTextRenderer.cleanup();
+    render('A'); // {A}
+    render('B'); // {A, B}
+    render('C'); // insert -> over cap -> eagerly evict LRU 'A' -> {B, C}
 
     vi.clearAllMocks();
-    render('B'); // evicted -> miss
-    render('A'); // survived -> hit
+    // Probe survivors first (hits only re-order, they don't change membership),
+    // then the evicted entry last so its re-insert can't perturb the assertion.
     render('C'); // survived -> hit
+    render('B'); // survived -> hit
+    render('A'); // evicted -> miss (one layout regen)
 
     expect(SdfFontHandler.getFontData).toHaveBeenCalledTimes(1);
   });

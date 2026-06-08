@@ -24,9 +24,14 @@ const type = 'sdf' as const;
 
 let sdfShader: WebGlShaderNode | null = null;
 
-// Upper bound on layoutCache entries, enforced on idle via `cleanup`.
-// Overridden from stage options in `init`. The cache is allowed to grow past
-// this during active rendering and is trimmed back to it when the stage idles.
+// Upper bound on layoutCache entries. Overridden from stage options in `init`.
+// Enforced both eagerly on insert (see `renderText`) and in bulk on idle (see
+// `cleanup`). The eager bound matters because a continuously animating scene
+// never goes idle, so idle-only eviction would let apps with ever-changing text
+// (clocks, counters, score/fps readouts) grow the cache without limit until the
+// page runs out of memory. The per-insert cost is a single Map delete on a
+// cache miss (i.e. only when new text is laid out), so it does not compete with
+// steady-state rendering.
 let maxLayoutCacheSize = 250;
 
 // Initialize the SDF text renderer
@@ -113,6 +118,15 @@ const renderText = (props: CoreTextNodeProps): TextRenderInfo => {
   // Calculate text layout and generate glyph data for caching
   layout = generateTextLayout(props, fontData);
   layoutCache.set(cacheKey, layout);
+
+  // Eagerly bound the cache. Idle `cleanup` alone is not enough: an animating
+  // scene never idles, so without this, ever-changing text grows the cache
+  // without limit. The Map is insertion-ordered and cache hits re-insert
+  // (delete + set) to the end, so the first key is the least-recently-used.
+  if (layoutCache.size > maxLayoutCacheSize) {
+    const oldest = layoutCache.keys().next().value as string;
+    layoutCache.delete(oldest);
+  }
 
   // For SDF renderer, ImageData is null since we render via WebGL
   return {
