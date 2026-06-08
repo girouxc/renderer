@@ -7,7 +7,10 @@ import type { WebGlContextWrapper } from '../../../lib/WebGlContextWrapper.js';
  * @param glw
  * @param size
  */
-export function createIndexBuffer(glw: WebGlContextWrapper, size: number) {
+export function createIndexBuffer(
+  glw: WebGlContextWrapper,
+  size: number,
+): WebGLBuffer | null {
   const maxQuads = ~~(size / 80);
   const indices = new Uint16Array(maxQuads * 6);
 
@@ -22,6 +25,7 @@ export function createIndexBuffer(glw: WebGlContextWrapper, size: number) {
 
   const buffer = glw.createBuffer();
   glw.elementArrayBufferData(buffer, indices, glw.STATIC_DRAW);
+  return buffer;
 }
 
 /**

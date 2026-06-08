@@ -14,6 +14,7 @@ import type { CanvasRenderer } from '../core/renderers/canvas/CanvasRenderer.js'
 import type { WebGlRenderer } from '../core/renderers/webgl/WebGlRenderer.js';
 import type { Inspector, InspectorOptions } from './Inspector.js';
 import type { CoreShaderNode } from '../core/renderers/CoreShaderNode.js';
+import type { RendererCapabilities } from '../core/renderers/CoreRenderer.js';
 import type {
   ExtractShaderProps,
   OptionalShaderProps,
@@ -1033,6 +1034,24 @@ export class RendererMain extends EventEmitter {
 
   getBufferInfo() {
     return this.stage.renderer.getBufferInfo();
+  }
+
+  /**
+   * Report the active rendering backend and device capabilities.
+   *
+   * @remarks
+   * Useful for diagnostics and field logging — e.g. confirming which WebGL
+   * version a device negotiated and whether Vertex Array Objects engaged.
+   * Reads live GL parameters (CPU↔GPU round-trips), so call once at startup
+   * rather than per frame.
+   *
+   * @example
+   * ```ts
+   * console.table(renderer.getCapabilities());
+   * ```
+   */
+  getCapabilities(): RendererCapabilities {
+    return this.stage.renderer.getCapabilities();
   }
 
   /**

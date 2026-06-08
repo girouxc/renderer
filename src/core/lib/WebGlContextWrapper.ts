@@ -11,8 +11,9 @@ import type {
  * Optimized WebGL Context Wrapper
  *
  * @remarks
- * This class contains the subset of the WebGLRenderingContext
- * API that is used by the renderer. Select high volume WebGL methods include
+ * This class contains the subset of the WebGLRenderingContext &
+ * WebGL2RenderingContext API that is used by the renderer. Select high volume
+ * WebGL methods include
  * caching optimizations to avoid making WebGL calls if the state is already set
  * to the desired value.
  *
@@ -49,6 +50,23 @@ export class WebGlContextWrapper {
   private curProgram: WebGLProgram | null;
   private curUniformLocations: Record<string, WebGLUniformLocation> = {};
   //#endregion Cached WebGL State
+
+  //#region Vertex Array Objects
+  // Native VAO handle when running on WebGL2, otherwise null.
+  private gl2: WebGL2RenderingContext | null;
+  // OES_vertex_array_object handle when running on WebGL1 with the extension,
+  // otherwise null.
+  private vaoExt: OES_vertex_array_object | null;
+  /**
+   * True when Vertex Array Objects are available (native WebGL2 or the
+   * `OES_vertex_array_object` WebGL1 extension). Lets callers cache attribute
+   * layout in a VAO and bind it with a single call instead of re-pointing
+   * every attribute on each draw.
+   */
+  public readonly canUseVertexArrayObject: boolean;
+  /** True when the underlying context is a WebGL2RenderingContext. */
+  public readonly isWebGl2: boolean;
+  //#endregion Vertex Array Objects
 
   //#region Canvas
   public readonly canvas;
@@ -93,7 +111,7 @@ export class WebGlContextWrapper {
   public readonly INVALID_OPERATION: number;
   //#endregion WebGL Enums
 
-  constructor(private gl: WebGLRenderingContext) {
+  constructor(private gl: WebGLRenderingContext | WebGL2RenderingContext) {
     // A freshly created WebGL context is in a fully specified default state.
     // Rather than reading that state back with getParameter/isEnabled — each a
     // synchronous CPU<->GPU round-trip, and previously ~one per texture unit
@@ -127,6 +145,19 @@ export class WebGlContextWrapper {
     this.boundArrayBuffer = null;
     this.boundElementArrayBuffer = null;
     this.curProgram = null;
+
+    // Resolve Vertex Array Object support: native on WebGL2, otherwise the
+    // OES_vertex_array_object extension on WebGL1 (universally available on
+    // the target browsers). `self` is used over `window` so the check also
+    // works when the context lives on an OffscreenCanvas in a worker.
+    this.gl2 =
+      self.WebGL2RenderingContext && gl instanceof self.WebGL2RenderingContext
+        ? (gl as WebGL2RenderingContext)
+        : null;
+    this.vaoExt =
+      this.gl2 === null ? gl.getExtension('OES_vertex_array_object') : null;
+    this.canUseVertexArrayObject = this.gl2 !== null || this.vaoExt !== null;
+    this.isWebGl2 = this.gl2 !== null;
 
     this.canvas = gl.canvas;
 
@@ -679,6 +710,75 @@ export class WebGlContextWrapper {
       this.boundArrayBuffer = buffer;
     }
     this.gl.vertexAttribPointer(index, size, type, normalized, stride, offset);
+  }
+
+  /**
+   * ```
+   * gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffer);
+   * ```
+   *
+   * @remarks
+   * Binds an element (index) array buffer WITHOUT the upload that
+   * {@link elementArrayBufferData} performs, and WITHOUT the binding-cache
+   * short-circuit. The element-array binding is part of Vertex Array Object
+   * state, so this is used while building a VAO to record the shared index
+   * buffer into it. The bind is unconditional because binding a VAO already
+   * changes the element-array binding out from under the cache.
+   *
+   * @param buffer
+   */
+  bindElementArrayBuffer(buffer: WebGLBuffer | null) {
+    this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, buffer);
+    this.boundElementArrayBuffer = buffer;
+  }
+
+  /**
+   * Creates a Vertex Array Object.
+   *
+   * @remarks
+   * Backed by native WebGL2 or the `OES_vertex_array_object` extension. Returns
+   * `null` when neither is available; guard with {@link canUseVertexArrayObject}.
+   *
+   * @returns
+   */
+  createVertexArray(): WebGLVertexArrayObject | null {
+    if (this.gl2 !== null) {
+      return this.gl2.createVertexArray();
+    }
+    if (this.vaoExt !== null) {
+      return this.vaoExt.createVertexArrayOES();
+    }
+    return null;
+  }
+
+  /**
+   * Binds a Vertex Array Object (or `null` to bind the default VAO).
+   *
+   * @param vertexArray
+   */
+  bindVertexArray(vertexArray: WebGLVertexArrayObject | null) {
+    if (this.gl2 !== null) {
+      this.gl2.bindVertexArray(vertexArray);
+      return;
+    }
+    if (this.vaoExt !== null) {
+      this.vaoExt.bindVertexArrayOES(vertexArray);
+    }
+  }
+
+  /**
+   * Deletes a Vertex Array Object.
+   *
+   * @param vertexArray
+   */
+  deleteVertexArray(vertexArray: WebGLVertexArrayObject) {
+    if (this.gl2 !== null) {
+      this.gl2.deleteVertexArray(vertexArray);
+      return;
+    }
+    if (this.vaoExt !== null) {
+      this.vaoExt.deleteVertexArrayOES(vertexArray);
+    }
   }
 
   /**

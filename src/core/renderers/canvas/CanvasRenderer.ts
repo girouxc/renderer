@@ -2,7 +2,11 @@ import type { CoreNode } from '../../CoreNode.js';
 import { SubTexture } from '../../textures/SubTexture.js';
 import { TextureType, type Texture } from '../../textures/Texture.js';
 import type { CoreContextTexture } from '../CoreContextTexture.js';
-import { CoreRenderer, type CoreRendererOptions } from '../CoreRenderer.js';
+import {
+  CoreRenderer,
+  type CoreRendererOptions,
+  type RendererCapabilities,
+} from '../CoreRenderer.js';
 import { CanvasTexture } from './CanvasTexture.js';
 import { parseColor } from '../../lib/colorParser.js';
 import { CanvasShaderNode, type CanvasShaderType } from './CanvasShaderNode.js';
@@ -291,6 +295,16 @@ export class CanvasRenderer extends CoreRenderer {
 
   getRenderOpCount(): null {
     return null;
+  }
+
+  getCapabilities(): RendererCapabilities {
+    return {
+      renderMode: 'canvas',
+      webGlVersion: null,
+      vertexArrayObject: false,
+      maxTextureSize: 0,
+      maxTextureUnits: 0,
+    };
   }
 
   // Canvas2D has no GPU out-of-memory signal to probe.

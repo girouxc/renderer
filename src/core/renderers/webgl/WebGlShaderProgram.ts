@@ -30,6 +30,19 @@ export class WebGlShaderProgram implements CoreShaderProgram {
   public isDestroyed = false;
   supportsIndexedTextures = false;
 
+  /**
+   * Cached Vertex Array Objects, keyed by the buffer collection they capture.
+   *
+   * @remarks
+   * A VAO records this program's attribute layout (enabled arrays, pointers and
+   * their source buffers) plus the shared element index buffer, so a draw only
+   * needs a single `bindVertexArray` instead of re-pointing every attribute. In
+   * practice a program only ever binds one collection, but keying by collection
+   * keeps it correct if that ever changes. Empty / unused when the context has
+   * no VAO support (see {@link WebGlContextWrapper.canUseVertexArrayObject}).
+   */
+  protected vaos = new Map<BufferCollection, WebGLVertexArrayObject | null>();
+
   constructor(
     renderer: WebGlRenderer,
     config: WebGlShaderType,
@@ -259,6 +272,30 @@ export class WebGlShaderProgram implements CoreShaderProgram {
 
   bindBufferCollection(buffer: BufferCollection) {
     const { glw } = this;
+
+    if (glw.canUseVertexArrayObject === true) {
+      let vao = this.vaos.get(buffer);
+      if (vao === undefined) {
+        // First draw with this collection: record the attribute layout into a
+        // VAO. createVao leaves the new VAO bound, so there's nothing more to do.
+        vao = this.createVao(buffer);
+        this.vaos.set(buffer, vao);
+        return;
+      }
+      glw.bindVertexArray(vao);
+      return;
+    }
+
+    // No VAO support: re-point every attribute on each draw.
+    this.bindAttributes(buffer);
+  }
+
+  /**
+   * Point this program's vertex attributes at the given buffer collection.
+   * When a VAO is bound this records into it; otherwise it mutates global state.
+   */
+  private bindAttributes(buffer: BufferCollection) {
+    const { glw } = this;
     const attribs = this.attributeLocations;
     const attribLen = attribs.length;
 
@@ -282,6 +319,25 @@ export class WebGlShaderProgram implements CoreShaderProgram {
     }
   }
 
+  /**
+   * Create and populate a Vertex Array Object capturing this program's
+   * attribute layout for the given buffer collection. The new VAO is left bound.
+   */
+  private createVao(buffer: BufferCollection): WebGLVertexArrayObject | null {
+    const { glw } = this;
+    const vao = glw.createVertexArray();
+    glw.bindVertexArray(vao);
+
+    this.bindAttributes(buffer);
+
+    // The element-array binding is part of VAO state and starts out null on a
+    // fresh VAO, so record the shared index buffer into it or indexed
+    // drawElements would read from no buffer.
+    glw.bindElementArrayBuffer(this.renderer.indexBuffer);
+
+    return vao;
+  }
+
   bindTextures(textures: WebGlCtxTexture[]) {
     const t = textures[0];
     if (t === undefined) {
@@ -299,6 +355,13 @@ export class WebGlShaderProgram implements CoreShaderProgram {
   }
 
   detach(): void {
+    // With VAOs the enabled-attribute state lives in each per-collection VAO,
+    // not in global context state. Disabling here would mutate whichever VAO is
+    // currently bound and corrupt it for the next draw, so there's nothing to
+    // do on a program switch.
+    if (this.glw.canUseVertexArrayObject === true) {
+      return;
+    }
     this.disableAttributes();
   }
 
@@ -309,6 +372,13 @@ export class WebGlShaderProgram implements CoreShaderProgram {
     const glw = this.glw;
 
     this.detach();
+
+    for (const vao of this.vaos.values()) {
+      if (vao !== null) {
+        glw.deleteVertexArray(vao);
+      }
+    }
+    this.vaos.clear();
 
     glw.deleteProgram(this.program!);
     this.program = null;

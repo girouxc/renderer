@@ -18,6 +18,35 @@ export interface BufferInfo {
   totalAvailable: number;
 }
 
+/**
+ * Backend and device capabilities of an active renderer.
+ *
+ * @remarks
+ * Intended as a one-shot startup diagnostic (some fields are GL round-trips,
+ * see {@link CoreRenderer.getCapabilities}). Useful for confirming which
+ * rendering path a given device actually took (e.g. whether Vertex Array
+ * Objects engaged) and for logging device limits from the field.
+ */
+export interface RendererCapabilities {
+  /** Active rendering backend. */
+  renderMode: 'webgl' | 'canvas';
+  /**
+   * WebGL major version of the active context (`1` or `2`), or `null` for the
+   * Canvas2D backend.
+   */
+  webGlVersion: 1 | 2 | null;
+  /**
+   * Whether attribute layout is cached in Vertex Array Objects (native WebGL2
+   * or the `OES_vertex_array_object` WebGL1 extension). `false` on Canvas2D or
+   * when neither is available.
+   */
+  vertexArrayObject: boolean;
+  /** Maximum texture dimension in pixels (`0` when not applicable). */
+  maxTextureSize: number;
+  /** Maximum simultaneously bound texture units (`0` when not applicable). */
+  maxTextureUnits: number;
+}
+
 export abstract class CoreRenderer {
   public options: CoreRendererOptions;
   public mode: 'webgl' | 'canvas' | undefined;
@@ -56,6 +85,14 @@ export abstract class CoreRenderer {
   abstract getBufferInfo(): BufferInfo | null;
   abstract getQuadCount(): number | null;
   abstract getRenderOpCount(): number | null;
+  /**
+   * Report the active backend and device capabilities.
+   *
+   * @remarks
+   * Reads live GL parameters, which are CPU↔GPU round-trips, so call this once
+   * at startup (e.g. to log) rather than per frame.
+   */
+  abstract getCapabilities(): RendererCapabilities;
   abstract updateViewport(): void;
   abstract updateClearColor(color: number): void;
   getTextureCoords?(node: CoreNode): TextureCoords | undefined;

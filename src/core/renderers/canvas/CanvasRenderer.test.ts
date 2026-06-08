@@ -32,3 +32,17 @@ describe('CanvasRenderer.renderContext', () => {
     expect((renderer as any).context.globalAlpha).toBe(1);
   });
 });
+
+describe('CanvasRenderer.getCapabilities', () => {
+  it('reports the canvas backend with no WebGL or VAO support', () => {
+    const renderer = Object.create(CanvasRenderer.prototype) as CanvasRenderer;
+
+    expect(renderer.getCapabilities()).toEqual({
+      renderMode: 'canvas',
+      webGlVersion: null,
+      vertexArrayObject: false,
+      maxTextureSize: 0,
+      maxTextureUnits: 0,
+    });
+  });
+});

@@ -9,6 +9,7 @@ import {
   CoreRenderer,
   type BufferInfo,
   type CoreRendererOptions,
+  type RendererCapabilities,
 } from '../CoreRenderer.js';
 import { SdfRenderOp } from './SdfRenderOp.js';
 import type { CoreContextTexture } from '../CoreContextTexture.js';
@@ -133,6 +134,15 @@ export class WebGlRenderer extends CoreRenderer {
   defaultShaderNode: WebGlShaderNode | null = null;
   quadBufferCollection: BufferCollection;
 
+  /**
+   * Shared static element (index) buffer for quad rendering.
+   *
+   * @remarks
+   * Bound once globally, but also recorded into each shader program's Vertex
+   * Array Object since the element-array binding is part of VAO state.
+   */
+  indexBuffer: WebGLBuffer | null = null;
+
   clearColor: WebGlColor = {
     raw: 0x00000000,
     normalized: [0, 0, 0, 0],
@@ -187,7 +197,7 @@ export class WebGlRenderer extends CoreRenderer {
     glw.setBlend(true);
     glw.blendFunc(glw.ONE, glw.ONE_MINUS_SRC_ALPHA);
 
-    createIndexBuffer(glw, this.stage.bufferMemory);
+    this.indexBuffer = createIndexBuffer(glw, this.stage.bufferMemory);
 
     // Create the static node coords buffer
     // 80 is the magic number used in createIndexBuffer
@@ -1278,6 +1288,17 @@ export class WebGlRenderer extends CoreRenderer {
       totalUsed: this.quadBufferUsage,
     };
     return bufferInfo;
+  }
+
+  getCapabilities(): RendererCapabilities {
+    const glw = this.glw;
+    return {
+      renderMode: 'webgl',
+      webGlVersion: glw.isWebGl2 ? 2 : 1,
+      vertexArrayObject: glw.canUseVertexArrayObject,
+      maxTextureSize: glw.getParameter(glw.MAX_TEXTURE_SIZE) as number,
+      maxTextureUnits: glw.getParameter(glw.MAX_TEXTURE_IMAGE_UNITS) as number,
+    };
   }
 
   /**
