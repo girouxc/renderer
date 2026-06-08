@@ -276,17 +276,25 @@ export class WebGlShaderProgram implements CoreShaderProgram {
     if (glw.canUseVertexArrayObject === true) {
       let vao = this.vaos.get(buffer);
       if (vao === undefined) {
-        // First draw with this collection: record the attribute layout into a
-        // VAO. createVao leaves the new VAO bound, so there's nothing more to do.
+        // First draw with this collection: try to capture the attribute layout
+        // in a VAO. Cache the result — including a null on allocation failure,
+        // so we don't retry createVertexArray every frame.
         vao = this.createVao(buffer);
         this.vaos.set(buffer, vao);
+      }
+      if (vao !== null) {
+        // createVao leaves a freshly built VAO bound; re-binding is cheap and
+        // keeps the build and reuse paths identical.
+        glw.bindVertexArray(vao);
         return;
       }
-      glw.bindVertexArray(vao);
-      return;
+      // VAO allocation failed (e.g. under GL OOM). Bind the default VAO so the
+      // per-draw attribute setup below records into it rather than corrupting
+      // another program's cached VAO, then fall through.
+      glw.bindVertexArray(null);
     }
 
-    // No VAO support: re-point every attribute on each draw.
+    // No (usable) VAO: re-point every attribute on each draw.
     this.bindAttributes(buffer);
   }
 
@@ -322,10 +330,15 @@ export class WebGlShaderProgram implements CoreShaderProgram {
   /**
    * Create and populate a Vertex Array Object capturing this program's
    * attribute layout for the given buffer collection. The new VAO is left bound.
+   * Returns null if the context reports VAO support but allocation fails (e.g.
+   * under GL OOM), in which case the caller falls back to per-draw binding.
    */
   private createVao(buffer: BufferCollection): WebGLVertexArrayObject | null {
     const { glw } = this;
     const vao = glw.createVertexArray();
+    if (vao === null) {
+      return null;
+    }
     glw.bindVertexArray(vao);
 
     this.bindAttributes(buffer);
