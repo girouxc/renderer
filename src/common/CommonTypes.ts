@@ -1,5 +1,6 @@
 import type { CoreNodeRenderState } from '../core/CoreNode.js';
 import type { TextureError } from '../core/TextureError.js';
+import type { RendererCapabilities } from '../core/renderers/CoreRenderer.js';
 
 /**
  * Types shared between Main Space and Core Space
@@ -119,6 +120,25 @@ export type NodeRenderStateEventHandler = (
 export interface FpsUpdatePayload {
   fps: number;
   contextSpyData: Record<string, number> | null;
+  /**
+   * Draw calls (render operations) submitted for the most recent frame.
+   * `0` on the Canvas backend, which does not batch into render ops.
+   */
+  renderOps: number;
+  /**
+   * Quads rendered in the most recent frame. `0` on the Canvas backend.
+   */
+  quads: number;
+  /**
+   * Active backend + device capabilities (see {@link RendererCapabilities}).
+   *
+   * @remarks
+   * Constant for the renderer's lifetime — included so each periodic sample is
+   * self-describing for logging/telemetry (e.g. slicing fps by WebGL version or
+   * whether VAOs engaged) without joining against a separate startup record.
+   * Computed once and reused, so it adds no per-frame GL cost.
+   */
+  capabilities: RendererCapabilities;
 }
 
 /**

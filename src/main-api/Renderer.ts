@@ -30,7 +30,8 @@ import { Platform } from '../core/platforms/Platform.js';
  * @example
  * ```typescript
  * renderer.on('fpsUpdate', (_target, data) => {
- *   console.log(`Current FPS: ${data.fps}`);
+ *   console.log(`${data.fps} fps, ${data.renderOps} draw calls`);
+ *   console.log('backend:', data.capabilities.renderMode, data.capabilities.webGlVersion);
  *   if (data.contextSpyData) {
  *     console.log('WebGL calls:', data.contextSpyData);
  *   }
@@ -42,6 +43,21 @@ export interface RendererMainFpsUpdateEvent {
   fps: number;
   /** Context spy data (if enabled) - contains WebGL call statistics */
   contextSpyData?: unknown;
+  /**
+   * Draw calls (render operations) submitted for the most recent frame.
+   * `0` on the Canvas backend.
+   */
+  renderOps: number;
+  /** Quads rendered in the most recent frame. `0` on the Canvas backend. */
+  quads: number;
+  /**
+   * Active backend + device capabilities (constant for the renderer's
+   * lifetime). Included so each periodic sample is self-describing for
+   * telemetry — e.g. slice fps by `webGlVersion` or `vertexArrayObject`.
+   *
+   * @see {@link RendererCapabilities}
+   */
+  capabilities: RendererCapabilities;
 }
 
 /**

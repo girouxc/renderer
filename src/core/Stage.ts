@@ -37,7 +37,10 @@ import {
   TextureMemoryManager,
   type TextureMemoryManagerSettings,
 } from './TextureMemoryManager.js';
-import { CoreRenderer } from './renderers/CoreRenderer.js';
+import {
+  CoreRenderer,
+  type RendererCapabilities,
+} from './renderers/CoreRenderer.js';
 import { CoreTextNode, type CoreTextNodeProps } from './CoreTextNode.js';
 import { santizeCustomDataMap } from '../main-api/utils.js';
 import type { CoreShaderNode } from './renderers/CoreShaderNode.js';
@@ -147,6 +150,10 @@ export class Stage {
   private fpsElapsedTime = 0;
   private numQuadsRendered = 0;
   private numRenderOpsRendered = 0;
+  // Cached on first fpsUpdate. Capabilities are constant for the renderer's
+  // lifetime, and getCapabilities() reads GL parameters (CPU<->GPU round-trips),
+  // so it must not be called every interval.
+  private capabilities: RendererCapabilities | null = null;
   private renderRequested = false;
   private reprocessFrame = false;
   private reprocessCallback: (() => void) | null = null;
@@ -682,9 +689,15 @@ export class Stage {
         );
         this.fpsNumFrames = 0;
         this.fpsElapsedTime = 0;
+        if (this.capabilities === null) {
+          this.capabilities = this.renderer.getCapabilities();
+        }
         this.queueFrameEvent('fpsUpdate', {
           fps,
           contextSpyData: this.contextSpy?.getData() ?? null,
+          renderOps: this.renderer.getRenderOpCount() ?? 0,
+          quads: this.renderer.getQuadCount() ?? 0,
+          capabilities: this.capabilities,
         } satisfies FpsUpdatePayload);
         this.contextSpy?.reset();
       }
