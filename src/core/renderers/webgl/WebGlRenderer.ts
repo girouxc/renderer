@@ -48,6 +48,19 @@ const GL_OUT_OF_MEMORY = 0x0505;
  */
 const MAX_DRAINED_GL_ERRORS = 8;
 
+/**
+ * Dirty-ratio cutoff that flips the per-frame quad upload from surgical
+ * `bufferSubData` (one call per changed node) to a single full `bufferData`.
+ *
+ * The surgical path wins when few nodes change per frame (typical UI), but
+ * degrades to one GL call per node when most of the scene moves at once
+ * (full-screen animation, scroll, zoom). At that point a single bulk upload is
+ * cheaper than N driver round-trips, so when the number of nodes we would
+ * `bufferSubData` exceeds this fraction of the render list we upload everything
+ * in one call instead. Range 0..1; ~0.4 balances the two regimes.
+ */
+const FULL_UPLOAD_DIRTY_RATIO = 0.4;
+
 export type WebGlRenderOp = CoreNode | SdfRenderOp;
 
 export class WebGlRenderer extends CoreRenderer {
@@ -969,31 +982,47 @@ export class WebGlRenderer extends CoreRenderer {
     const BYTES = Float32Array.BYTES_PER_ELEMENT;
 
     if (DIRTY_QUAD_BUFFER) {
-      if (
-        this.needsFullUpload ||
-        this.curBufferIdx > this.lastUploadedBufferSize
-      ) {
-        // Full GPU re-allocation: covers new nodes and structural reorders.
-        // Also triggered when curBufferIdx has grown beyond the last uploaded
-        // size (e.g. after RTT rendering consumed needsFullUpload and then
-        // the main scene added more quads).
-        // Uses DYNAMIC_DRAW to signal to the driver that the buffer will be
-        // updated frequently in smaller pieces going forward.
+      const renderList = this.stage.renderList;
+      const len = renderList.length;
+
+      // Growth/realloc always forces a full upload (new nodes, structural
+      // reorders, or curBufferIdx grown past the last uploaded size).
+      let fullUpload =
+        this.needsFullUpload || this.curBufferIdx > this.lastUploadedBufferSize;
+
+      // Otherwise decide adaptively: if the number of nodes we would upload
+      // surgically exceeds FULL_UPLOAD_DIRTY_RATIO of the render list, a single
+      // bufferData is cheaper than that many bufferSubData calls. Counting is a
+      // cheap boolean pass; it runs only when we aren't already forced full.
+      if (fullUpload === false) {
+        let dirtyUploads = 0;
+        for (let i = 0; i < len; i++) {
+          const node = renderList[i]!;
+          if (node.isQuadDirty === true && node.quadBufferIndex !== -1) {
+            dirtyUploads++;
+          }
+        }
+        fullUpload = dirtyUploads > len * FULL_UPLOAD_DIRTY_RATIO;
+      }
+
+      if (fullUpload === true) {
+        // Full GPU re-allocation: covers the growth/realloc cases above and the
+        // "most of the scene changed" case where one bulk upload beats N
+        // per-node uploads. Uses DYNAMIC_DRAW to signal to the driver that the
+        // buffer will be updated frequently going forward.
         const arr = new Float32Array(quadBuffer, 0, this.curBufferIdx);
         glw.arrayBufferData(buffer, arr, glw.DYNAMIC_DRAW);
         this.needsFullUpload = false;
         this.lastUploadedBufferSize = this.curBufferIdx;
 
         // Clear dirty flags since we just uploaded everything.
-        const renderList = this.stage.renderList;
-        for (let i = 0, len = renderList.length; i < len; i++) {
+        for (let i = 0; i < len; i++) {
           renderList[i]!.isQuadDirty = false;
         }
       } else {
         // Surgical per-node uploads: only write the 20 float32s for nodes
         // whose quad data changed since the last frame.
-        const renderList = this.stage.renderList;
-        for (let i = 0, len = renderList.length; i < len; i++) {
+        for (let i = 0; i < len; i++) {
           const node = renderList[i]!;
           if (node.isQuadDirty && node.quadBufferIndex !== -1) {
             const byteOffset = node.quadBufferIndex * BYTES;
