@@ -409,7 +409,6 @@ export default async function test({
         r.fps
       } fps, ${r.limiter})\n`;
     }
-    panel += 'Re-run with &novao=true to compare VAO off.';
     renderer.createTextNode({
       x: 40,
       y: 60,
