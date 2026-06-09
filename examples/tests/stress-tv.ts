@@ -161,7 +161,7 @@ export default async function test({
 
   // Start near a rung scaled by ?multiplier so automation/large runs can bias up.
   let ladderIndex = 2; // 200
-  let tier = 3; // full card by default — the realistic TV workload
+  let tier = 1; // +image by default — keeps node/glyph count modest on low-RAM devices
 
   // Bottom-left so it never collides with the top-left ?debug=true overlay.
   const hud = renderer.createTextNode({
