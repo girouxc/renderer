@@ -1,0 +1,20 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "examples",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["start"],
+      "port": 5173
+    },
+    {
+      "name": "lr-examples",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "cd ../lightning-renderer/examples && pnpm exec vite --port 5174 --strictPort"
+      ],
+      "port": 5174
+    }
+  ]
+}
