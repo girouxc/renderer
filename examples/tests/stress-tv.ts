@@ -31,6 +31,14 @@ import elevator from '../assets/robot/elevator-background.png';
  *   Up / Down    : step card count up / down through the ladder (rebuilds grid)
  *   Left / Right : cycle scene tier (rect -> +image -> +text -> full card)
  *   Enter (OK)   : toggle an alpha pulse on every card (adds per-frame churn)
+ *
+ * Automatic sweep — find the "sweet spot" (highest card count that still holds
+ * the target frame rate) for every tier, no remote needed:
+ *   ?test=stress-tv&autosweep=true            (target 60 fps)
+ *   ?test=stress-tv&autosweep=true&targetfps=30
+ * Results print to the console (console.table) and to an on-screen panel.
+ * VAO is fixed at renderer construction, so A/B it with two runs and compare:
+ *   ?test=stress-tv&autosweep=true   vs   ?test=stress-tv&autosweep=true&novao=true
  */
 
 // Distinct image sources cycled per card so the batcher has to switch
@@ -61,11 +69,65 @@ const randomTitle = (length: number): string => {
   return out;
 };
 
+// Hard per-frame ceiling of the Uint16 index buffer: 16384 quads, and
+// independently 16384 glyphs. Past it, geometry drops out regardless of FPS —
+// a correctness wall distinct from the performance wall. The auto-sweep clamps
+// to it so it never reports a count whose own text would have vanished.
+const QUAD_CAP = 16384;
+// Glyphs spent on the HUD + debug overlay + results panel — reserved so the
+// sweep's own UI stays inside the cap.
+const RESERVED_GLYPHS = 300;
+
+// Main quads per card: rounded-rect background (+ image thumbnail from tier 2).
+const quadsPerCard = (t: number): number => (t >= 1 ? 2 : 1);
+// SDF glyphs per card: ~8 for the title (tier 3+), +12 for the subtitle (tier 4).
+const glyphsPerCard = (t: number): number => (t >= 3 ? 20 : t >= 2 ? 8 : 0);
+
+// Highest card count for tier `t` that stays under the index-buffer ceiling.
+const correctnessCap = (t: number): number => {
+  const byQuads = Math.floor(QUAD_CAP / quadsPerCard(t));
+  const g = glyphsPerCard(t);
+  const byGlyphs =
+    g > 0 ? Math.floor((QUAD_CAP - RESERVED_GLYPHS) / g) : Infinity;
+  return Math.min(byQuads, byGlyphs);
+};
+
+// Median FPS over `frames` animation frames, discarding a short warm-up so the
+// rebuild spike and first-frame text/texture upload don't skew the result.
+const measureFps = (frames: number): Promise<number> =>
+  new Promise((resolve) => {
+    const deltas: number[] = [];
+    const warmup = 15;
+    let seen = 0;
+    let last = performance.now();
+    const tick = (now: number): void => {
+      const d = now - last;
+      last = now;
+      seen++;
+      if (seen > warmup) {
+        deltas.push(d);
+      }
+      if (deltas.length < frames) {
+        requestAnimationFrame(tick);
+        return;
+      }
+      deltas.sort((a, b) => a - b);
+      const median = deltas[deltas.length >> 1]!;
+      resolve(1000 / median);
+    };
+    requestAnimationFrame(tick);
+  });
+
 export default async function ({
   renderer,
   testRoot,
   perfMultiplier,
 }: ExampleSettings) {
+  const params = new URLSearchParams(window.location.search);
+  const autosweep = params.get('autosweep') === 'true';
+  const targetFps = Number(params.get('targetfps') ?? 60);
+  const vaoOff = params.get('novao') === 'true';
+
   renderer.createNode({
     x: 0,
     y: 0,
@@ -117,7 +179,7 @@ export default async function ({
       'Up/Down count   Left/Right tier   OK pulse   (add ?debug=true for FPS/draws/quads/VAO)';
   };
 
-  const buildGrid = (): void => {
+  const buildGrid = (count: number): void => {
     // Tear down the previous grid in one shot — destroy() recurses to children.
     gridRoot.destroy();
     cards = [];
@@ -129,8 +191,6 @@ export default async function ({
       h: APP_H,
       parent: testRoot,
     });
-
-    const count = currentCount();
 
     // Auto-fit a near-square cell grid across the screen so on-screen fill
     // stays ~constant regardless of count.
@@ -222,39 +282,155 @@ export default async function ({
     }
   };
 
+  // Drive every tier from low to high, find the highest count that holds the
+  // target frame rate, then bisect between the last good rung and the first bad
+  // one for a sharper number. Counts are clamped to the index-buffer cap so the
+  // sweep never builds a scene whose own text would drop out.
+  const runAutoSweep = async (targetFps: number): Promise<void> => {
+    // Measure raw capability, not a throttle.
+    renderer.targetFPS = 0;
+    const meets = (fps: number): boolean => fps >= targetFps - 2;
+
+    interface SweepResult {
+      tier: string;
+      sweetSpot: number;
+      fps: number;
+      limiter: string;
+      indexCap: number;
+    }
+    const results: SweepResult[] = [];
+
+    for (let t = 0; t < TIER_NAMES.length; t++) {
+      tier = t;
+      const cap = correctnessCap(t);
+      const rungs = COUNT_LADDER.filter((c) => c <= cap);
+      if (cap !== Infinity && rungs[rungs.length - 1] !== cap) {
+        rungs.push(cap);
+      }
+
+      let lastGood = 0;
+      let lastGoodFps = 0;
+      let firstBad = 0;
+      for (let r = 0; r < rungs.length; r++) {
+        const count = rungs[r]!;
+        buildGrid(count);
+        hud.text = `auto-sweep — tier ${t + 1}/${
+          TIER_NAMES.length
+        }, testing ${count} cards…`;
+        const fps = await measureFps(35);
+        console.log(`  tier ${t + 1}  ${count} cards  ${fps.toFixed(1)} fps`);
+        if (meets(fps) === true) {
+          lastGood = count;
+          lastGoodFps = fps;
+        } else {
+          firstBad = count;
+          break;
+        }
+      }
+
+      // Bisect the gap between the last good and first bad rung.
+      let sweet = lastGood;
+      let sweetFps = lastGoodFps;
+      if (firstBad > 0 && firstBad - lastGood > 25) {
+        let lo = lastGood;
+        let hi = firstBad;
+        while (hi - lo > 25) {
+          const mid = (lo + hi) >> 1;
+          buildGrid(mid);
+          const fps = await measureFps(30);
+          if (meets(fps) === true) {
+            lo = mid;
+            sweetFps = fps;
+          } else {
+            hi = mid;
+          }
+        }
+        sweet = lo;
+      }
+
+      const limiter =
+        firstBad > 0
+          ? `${targetFps}fps`
+          : cap !== Infinity && sweet >= cap
+          ? 'index cap'
+          : 'ladder max';
+      results.push({
+        tier: TIER_NAMES[t]!,
+        sweetSpot: sweet,
+        fps: Math.round(sweetFps),
+        limiter,
+        indexCap: cap === Infinity ? 0 : cap,
+      });
+    }
+
+    console.log(`\n=== stress-tv sweet spots (target ${targetFps} fps) ===`);
+    console.table(results);
+
+    // Render the verdict on screen (small scene — well under the cap).
+    gridRoot.destroy();
+    cards = [];
+    hud.text = '';
+    let panel = `SWEET SPOT @ ${targetFps} fps   (VAO ${
+      vaoOff === true ? 'OFF' : 'ON'
+    })\n`;
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i]!;
+      panel += `tier ${i + 1}: ${r.sweetSpot} cards  (${
+        r.fps
+      } fps, limited by ${r.limiter})\n`;
+    }
+    panel += 'Re-run with &novao=true to compare VAO off.';
+    renderer.createTextNode({
+      x: 40,
+      y: 60,
+      fontFamily: 'Ubuntu',
+      textRendererOverride: 'sdf',
+      fontSize: 30,
+      lineHeight: 42,
+      color: 0xffffffff,
+      text: panel,
+      parent: testRoot,
+    });
+  };
+
+  if (autosweep === true) {
+    void runAutoSweep(targetFps);
+    return;
+  }
+
   window.addEventListener('keydown', (event) => {
     const key = event.key;
 
     if (key === 'ArrowUp') {
       if (ladderIndex < COUNT_LADDER.length - 1) {
         ladderIndex++;
-        buildGrid();
+        buildGrid(currentCount());
       }
       return;
     }
     if (key === 'ArrowDown') {
       if (ladderIndex > 0) {
         ladderIndex--;
-        buildGrid();
+        buildGrid(currentCount());
       }
       return;
     }
     if (key === 'ArrowRight') {
       tier = (tier + 1) % TIER_NAMES.length;
-      buildGrid();
+      buildGrid(currentCount());
       return;
     }
     if (key === 'ArrowLeft') {
       tier = (tier + TIER_NAMES.length - 1) % TIER_NAMES.length;
-      buildGrid();
+      buildGrid(currentCount());
       return;
     }
     if (key === 'Enter') {
       pulsing = pulsing !== true;
-      buildGrid();
+      buildGrid(currentCount());
       return;
     }
   });
 
-  buildGrid();
+  buildGrid(currentCount());
 }
