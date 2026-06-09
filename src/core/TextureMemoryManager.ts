@@ -167,6 +167,44 @@ export class TextureMemoryManager {
   }
 
   /**
+   * Reversibly free a texture's GPU resources under memory pressure.
+   *
+   * @remarks
+   * Unlike {@link destroyTexture}, this keeps the `Texture` object, its event
+   * listeners, and its cache entry intact. It only releases the GPU-side
+   * resource and transitions the source to the `freed` state. A `CoreNode` that
+   * still references this texture will reload it — and be re-notified via its
+   * `loaded` listener — when it re-enters the viewport (see
+   * `Texture.setRenderableOwner` → `Texture.load`).
+   *
+   * This is the correct path for LRU/idle cleanup: destroying instead would
+   * sever the node's subscription (`removeAllListeners`) and evict the cache
+   * entry, leaving the node stuck on a texture that reloads to `loaded` but is
+   * never displayed.
+   *
+   * `texture.free()` reclaims tracked memory via `setTextureMemUse(0)` when a
+   * ctxTexture exists; the guard below keeps the accounting correct for any
+   * texture that entered `loadedTextures` without one.
+   *
+   * @param texture - The texture to free
+   */
+  freeTexture(texture: Texture) {
+    if (this.debugLogging === true) {
+      console.log(
+        `[TextureMemoryManager] Freeing texture. State: ${texture.state}`,
+      );
+    }
+
+    texture.free();
+
+    if (this.loadedTextures.has(texture) === true) {
+      this.loadedTextures.delete(texture);
+      this.memUsed -= texture.memUsed;
+      texture.memUsed = 0;
+    }
+  }
+
+  /**
    * Destroy a texture and remove it from the memory manager
    *
    * @param texture - The texture to destroy
@@ -230,11 +268,12 @@ export class TextureMemoryManager {
 
       // Immediate cleanup if eligible
       if (isCleanableType && texture.canBeCleanedUp() === true) {
-        // Get memory before destroying
+        // Get memory before freeing
         const textureMemory = texture.memUsed;
 
-        // Destroy texture (which will null out the array position)
-        this.destroyTexture(texture);
+        // Reversibly free (keeps listeners + cache) so the texture reloads when
+        // its node re-enters the viewport.
+        this.freeTexture(texture);
         currentMemUsed -= textureMemory;
       }
     }

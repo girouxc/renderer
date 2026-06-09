@@ -1,10 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   TextureMemoryManager,
   type TextureMemoryManagerSettings,
 } from './TextureMemoryManager.js';
 import type { Stage } from './Stage.js';
-import type { Texture } from './textures/Texture.js';
+import { TextureType, type Texture } from './textures/Texture.js';
 
 function makeSettings(
   overrides: Partial<TextureMemoryManagerSettings> = {},
@@ -94,5 +94,54 @@ describe('TextureMemoryManager — out-of-memory event', () => {
       memUsed: 156e6, // 26e6 baseline + 50e6 + 80e6
       criticalThreshold: 200e6,
     });
+  });
+});
+
+// A cleanable image texture: spies on free()/destroy() so we can assert which
+// reclamation path cleanup() takes. memUsed starts at 0 — setTextureMemUse is
+// what registers its size with the manager.
+function cleanableTexture(): Texture & {
+  free: ReturnType<typeof vi.fn>;
+  destroy: ReturnType<typeof vi.fn>;
+} {
+  return {
+    memUsed: 0,
+    state: 'loaded',
+    type: TextureType.image,
+    free: vi.fn(),
+    destroy: vi.fn(),
+    canBeCleanedUp: () => true,
+  } as unknown as Texture & {
+    free: ReturnType<typeof vi.fn>;
+    destroy: ReturnType<typeof vi.fn>;
+  };
+}
+
+describe('TextureMemoryManager — cleanup is reversible', () => {
+  it('frees textures rather than destroying them so they can reload', () => {
+    const { mgr } = makeManager({ criticalThreshold: 200e6 });
+    const texture = cleanableTexture();
+    mgr.setTextureMemUse(texture, 100e6);
+
+    mgr.cleanup(true);
+
+    // Reversible free path — keeps listeners + cache so a node still
+    // referencing the texture reloads (and is re-notified) on viewport
+    // re-entry. The terminal destroy path (removeAllListeners + cache evict)
+    // must NOT be taken.
+    expect(texture.free).toHaveBeenCalledTimes(1);
+    expect(texture.destroy).not.toHaveBeenCalled();
+  });
+
+  it('reclaims the freed texture memory', () => {
+    const { mgr } = makeManager({ criticalThreshold: 200e6 });
+    const texture = cleanableTexture();
+    mgr.setTextureMemUse(texture, 100e6);
+    expect(mgr.getMemoryInfo().memUsed).toBe(126e6); // 26e6 baseline + 100e6
+
+    mgr.cleanup(true);
+
+    expect(mgr.getMemoryInfo().memUsed).toBe(26e6); // back to baseline
+    expect(texture.memUsed).toBe(0);
   });
 });
