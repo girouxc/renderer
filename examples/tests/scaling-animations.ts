@@ -23,7 +23,7 @@ export default async function ({ renderer, testRoot }: ExampleSettings) {
       colorBottom: randomColor(),
       colorTop: randomColor(),
       parent: testRoot,
-      shader: renderer.createShader('RoundedRectangle', {
+      shader: renderer.createShader('Rounded', {
         radius: rnd(10, 50),
       }),
       scale: 1,
@@ -37,7 +37,7 @@ export default async function ({ renderer, testRoot }: ExampleSettings) {
       h: 20,
       color: 0xffffff55,
       parent: node,
-      // shader: renderer.createShader('RoundedRectangle', {
+      // shader: renderer.createShader('Rounded', {
       //   radius: 5,
       // }),
       scale: 1,
@@ -50,7 +50,7 @@ export default async function ({ renderer, testRoot }: ExampleSettings) {
       h: 16,
       color: 0x000000ff,
       parent: pivotPoint,
-      // shader: renderer.createShader('RoundedRectangle', {
+      // shader: renderer.createShader('Rounded', {
       //   radius: 3,
       // }),
     });

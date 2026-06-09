@@ -1,5 +1,6 @@
 import { type INode } from '@lightningjs/renderer';
 import type { ExampleSettings } from '../common/ExampleSettings.js';
+import { waitUntilIdle } from '../common/utils.js';
 import lightning from '../assets/lightning.png';
 import rocko from '../assets/rocko.png';
 import testscreen from '../assets/testscreen.png';
@@ -118,7 +119,16 @@ const measureFps = (frames: number): Promise<number> =>
     requestAnimationFrame(tick);
   });
 
-export default async function ({
+export async function automation(settings: ExampleSettings) {
+  // No autosweep/key driving in automation — `test` builds the default scene
+  // (tier 4, 200 cards: rounded cards + images + SDF text). Wait for textures
+  // and text layout to settle so the snapshot is the stable final frame.
+  await test(settings);
+  await waitUntilIdle(settings.renderer);
+  await settings.snapshot();
+}
+
+export default async function test({
   renderer,
   testRoot,
   perfMultiplier,

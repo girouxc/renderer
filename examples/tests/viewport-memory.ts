@@ -1,4 +1,13 @@
 import type { ExampleSettings } from '../common/ExampleSettings.js';
+import { waitUntilIdle } from '../common/utils.js';
+
+export async function automation(settings: ExampleSettings) {
+  await test(settings);
+  // The scene streams in async (SDF text layout + rounded-rect shaders);
+  // wait for the renderer to settle so the snapshot is the stable final frame.
+  await waitUntilIdle(settings.renderer);
+  await settings.snapshot();
+}
 
 function getRandomTitle(length = 10) {
   const characters =
@@ -29,7 +38,7 @@ export default async function test(settings: ExampleSettings) {
     w: 100,
     h: 100,
     color: 0xff0000ff,
-    shader: renderer.createShader('RoundedRectangle', {
+    shader: renderer.createShader('Rounded', {
       radius: 50,
     }),
     parent: testRoot,
@@ -41,7 +50,7 @@ export default async function test(settings: ExampleSettings) {
     w: 100,
     h: 100,
     color: 0x0000ffff,
-    shader: renderer.createShader('RoundedRectangle', {
+    shader: renderer.createShader('Rounded', {
       radius: 50,
     }),
     parent: testRoot,
@@ -53,7 +62,7 @@ export default async function test(settings: ExampleSettings) {
     w: 100,
     h: 100,
     color: 0xffff00ff,
-    shader: renderer.createShader('RoundedRectangle', {
+    shader: renderer.createShader('Rounded', {
       radius: 50,
     }),
     parent: testRoot,
@@ -98,7 +107,7 @@ export default async function test(settings: ExampleSettings) {
         h: 90, // Slightly smaller height
         color: 0x00ff00ff, // Green
         parent: borderNode,
-        shader: renderer.createShader('RoundedRectangle', {
+        shader: renderer.createShader('Rounded', {
           radius: 10,
         }),
       });
