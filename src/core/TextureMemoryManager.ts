@@ -205,11 +205,20 @@ export class TextureMemoryManager {
   }
 
   /**
-   * Destroy a texture and remove it from the memory manager
+   * Destroy a texture, evict its cache entry, and remove it from the memory
+   * manager.
+   *
+   * @remarks
+   * Private on purpose: `destroy()` calls `removeAllListeners()`, so running
+   * this on a texture that still has subscribers severs a live `CoreNode`'s
+   * (or `SubTexture`'s) connection — the blank-poster bug. The only safe
+   * entry point is {@link evictOrphanedTextures}, which proves the texture
+   * is unreferenced first. For memory pressure use {@link freeTexture},
+   * which is reversible.
    *
    * @param texture - The texture to destroy
    */
-  destroyTexture(texture: Texture) {
+  private destroyTexture(texture: Texture) {
     if (this.debugLogging === true) {
       console.log(
         `[TextureMemoryManager] Destroying texture. State: ${texture.state}`,
@@ -278,6 +287,8 @@ export class TextureMemoryManager {
       }
     }
 
+    this.evictOrphanedTextures();
+
     if (this.memUsed >= this.criticalThreshold) {
       this.stage.queueFrameEvent('criticalCleanupFailed', {
         memUsed: this.memUsed,
@@ -297,6 +308,52 @@ export class TextureMemoryManager {
     } else {
       this.criticalCleanupRequested = false;
       this.hasWarnedAboveCritical = false;
+    }
+  }
+
+  /**
+   * Destroy-and-evict freed textures that nothing references anymore.
+   *
+   * @remarks
+   * {@link freeTexture} intentionally keeps the texture's cache entry and
+   * listeners so a live `CoreNode` can reload it in place. But once the last
+   * referencing node is destroyed (`unloadTexture` removes its listeners and
+   * owner), the freed texture's `keyCache` entry can never be displayed again
+   * — without eviction the cache grows unboundedly in apps cycling many
+   * unique textures.
+   *
+   * A texture is an orphan only when it has zero `renderableOwners` AND zero
+   * event listeners: every live referencer (`CoreNode.loadTextureTask`,
+   * `SubTexture`) subscribes via `on()`. A texture with any listener must
+   * NEVER be destroyed here — `destroy()` calls `removeAllListeners()`, which
+   * would sever the node's subscription and reintroduce the blank-poster bug
+   * that {@link freeTexture} exists to prevent.
+   *
+   * `'initial'` and `'failed'` orphans leak the same way (created or failed,
+   * then the node was destroyed before the texture ever loaded; nothing will
+   * ever retry a `'failed'` texture without a listener). They are evicted only
+   * after the startup grace period: a node created this same frame subscribes
+   * in a queued microtask, so a fresh texture can look orphaned during a
+   * same-frame cleanup. In-flight states (`'fetching'`/`'loading'`/`'fetched'`)
+   * are never evicted; `'loaded'` orphans go through the pressure-driven free
+   * loop first and are swept here as `'freed'` on a later pass.
+   */
+  private evictOrphanedTextures(): void {
+    const keyCache = this.stage.txManager.keyCache;
+    for (const texture of keyCache.values()) {
+      const state = texture.state;
+      const evictable =
+        state === 'freed' ||
+        ((state === 'initial' || state === 'failed') &&
+          texture.isWithinStartupGracePeriod() === false);
+      if (
+        evictable === true &&
+        texture.preventCleanup === false &&
+        texture.renderableOwners.length === 0 &&
+        texture.hasListeners() === false
+      ) {
+        this.destroyTexture(texture);
+      }
     }
   }
 

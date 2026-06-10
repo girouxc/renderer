@@ -70,6 +70,27 @@ export class EventEmitter implements IEventEmitter {
     });
   }
 
+  /**
+   * Whether any listener is currently registered for any event.
+   *
+   * @remarks
+   * Used as a liveness signal: a `Texture` with no listeners has no
+   * `CoreNode` (or `SubTexture`) subscribed to it.
+   */
+  hasListeners(): boolean {
+    const map = this.eventListeners;
+    if (map === null) {
+      return false;
+    }
+    for (const event in map) {
+      const listeners = map[event];
+      if (listeners !== undefined && listeners.length > 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   removeAllListeners() {
     this.eventListeners = null;
   }
