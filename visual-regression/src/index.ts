@@ -33,6 +33,7 @@ let snapshotsTested = 0;
 let snapshotsPassed = 0;
 let snapshotsFailed = 0;
 let snapshotsSkipped = 0;
+const pageErrors: string[] = [];
 
 /**
  * The runtime environment (local, ci, etc.)
@@ -387,6 +388,18 @@ async function runTest(
       );
     }
 
+    // Fail the run on uncaught page errors. Pixels can still match while an
+    // example throws every frame (e.g. a frozen textureOptions mutation), so
+    // a green snapshot alone is not enough. Dedupe because rAF-driven errors
+    // repeat identically each frame.
+    page.on('pageerror', (err) => {
+      const message = `worker[${shardIndex}] (${renderMode}): ${err.message}`;
+      if (pageErrors.indexOf(message) === -1) {
+        pageErrors.push(message);
+        console.log(chalk.red.bold(`PAGE ERROR! ${message}`));
+      }
+    });
+
     await page.exposeFunction('snapshot', makeSnapshotHandler(page));
 
     const donePromise = new Promise<void>((resolve) => {
@@ -462,7 +475,16 @@ async function runTest(
     console.log(chalk.gray(`   ${snapshotsTested} snapshots tested`));
   }
 
+  if (pageErrors.length > 0) {
+    console.log(
+      chalk.red(`   ${pageErrors.length} uncaught page error(s) detected:`),
+    );
+    for (let i = 0; i < pageErrors.length; i++) {
+      console.log(chalk.red(`      ${pageErrors[i]}`));
+    }
+  }
+
   console.log(chalk.reset(''));
 
-  return snapshotsFailed > 0 ? 1 : 0;
+  return snapshotsFailed > 0 || pageErrors.length > 0 ? 1 : 0;
 }

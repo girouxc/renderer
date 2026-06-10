@@ -21,6 +21,71 @@ Optimize for performance.
 - Touch only what you must. Clean up only your own mess.
 - Define success criteria. Loop until verified.
 
+## TV Performance Model (READ BEFORE OPTIMIZING)
+
+Target devices are embedded TV SoCs running Chrome 38+. Their cost model is
+different from desktop — optimize against this model, not intuition:
+
+1. **GL calls cost CPU, not GPU.** Every WebGL call is serialized into
+   Chrome's GPU-process command buffer (~0.5–2µs each on TV CPUs). A screen
+   of 50 single-op cards × ~12 calls each ≈ 0.5–1ms/frame of pure driver
+   CPU. Reducing _calls_ (uniforms, buffer uploads) usually beats reducing
+   _draw calls_ — measured: merging draw calls alone did not change FPS.
+2. **`bufferData` is a driver-side CPU copy.** A per-frame upload of a few
+   hundred KB (e.g. the SDF text buffer) is a guaranteed CPU tax. Skip
+   uploads whose bytes are provably unchanged.
+3. **Fill rate is the GPU wall.** Per-fragment cost = shader ALU + varying
+   interpolation + blending bandwidth. Varyings that are constant across a
+   quad are pure waste — compute them on the CPU and upload as uniforms.
+   Uniform-based branches are effectively free; quad-constant data through
+   interpolators is not.
+4. **To find the bottleneck:** render at half-resolution backbuffer — if FPS
+   jumps, you're fill-rate bound (attack shaders/overdraw); if not, trace
+   CPU time in `drawFrame` vs the GPU process (attack GL call count and
+   JS update work).
+
+### Caching layers and their invariants (do not break)
+
+- **Shader programs** are cached per shader key (`shCache`) — one compile
+  ever. Shader _nodes_ are NOT cached: each `createShader()` call allocates
+  (~10 defineProperty closures). Reuse shader nodes across remounts.
+- **Uniform values are a function of `resolvedProps` + node `w`/`h` and
+  NOTHING else.** This is the shader value-key cache contract
+  (`CoreShaderNode.createValueKey`). Never make a shader's `update()` read
+  position, time, or any other state — caching at three layers assumes this.
+- **Uniform collections are immutable after fill and shared by reference**
+  across shader nodes with equal value keys. Reference equality implies
+  value equality — `WebGlShaderProgram.bindRenderOp` skips re-uploads on
+  this basis. Never mutate a collection after `update()` fills it.
+- **GL uniform values are per-program state** that persists across
+  `useProgram` switches. `bindRenderOp` is the only writer and keeps shadow
+  copies — if you add another uniform writer, update the shadows or you
+  will create stale-skip bugs.
+- **`UpdateType.RecalcUniforms` fires only on dimension changes** (w/h
+  setters, Autosizer, text layout) and shader assignment — never on pure
+  translation. If you add a new `props.w`/`props.h` writer, raise the flag
+  there too.
+- **The SDF buffer upload is skipped when content is unchanged**
+  (`sdfBufferChanged` + size match). The cache-hit path
+  (`addSdfCachedQuads`) must keep writing byte-identical data at identical
+  offsets; any new SDF write path or reorder source must set
+  `sdfBufferChanged = true`. Conservative direction: when in doubt, force
+  the upload — a redundant upload is correct, a wrong skip is a glitch.
+- **SDF vertex caches are world-space**: they hit only while a text node's
+  transform is static. Layout caches hit regardless of position.
+
+### Rules for new optimizations
+
+- Derive dirty signals **inside the renderer from which code path ran**
+  when possible (cheap, no invalidation matrix) instead of scene-graph
+  hooks (every writer must be found, and a missed one is a heisenbug).
+- Every skip must fail conservative: uncertainty → do the work.
+- Per-quad-constant values belong in uniforms; per-quad-varying values
+  belong in vertex attributes; never ship constants through varyings.
+- Know the scroll path: rows translate under a static clipping viewport.
+  Translation must stay on fast paths — anything added per-`Global`-update
+  runs for every node of every scroll frame.
+
 ### Architecture Principles
 
 - **Class-based design** - Use TypeScript classes for structure and type safety
