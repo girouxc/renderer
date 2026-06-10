@@ -15,7 +15,9 @@ export enum AutosizeUpdateType {
 const applyDimensions = (node: CoreNode, w: number, h: number) => {
   node.props.w = w;
   node.props.h = h;
-  node.setUpdateType(UpdateType.Local);
+  // Direct props.w/h write bypasses the w/h setters, so raise RecalcUniforms
+  // here too — dimensions feed shader uniforms.
+  node.setUpdateType(UpdateType.Local | UpdateType.RecalcUniforms);
 };
 
 const getFilteredChildren = (

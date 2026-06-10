@@ -1355,7 +1355,13 @@ export class CoreNode extends EventEmitter {
       this.calculateRenderCoords();
       this.updateBoundingRect();
 
-      updateType |= UpdateType.RenderState | UpdateType.RecalcUniforms;
+      // RecalcUniforms is intentionally NOT set here: shader uniforms are a
+      // function of resolvedProps + w/h only (that is exactly the shader
+      // value-key cache key), so pure transform changes (translate, scale,
+      // rotate) cannot affect them. The flag is raised where w/h actually
+      // change: the w/h setters, Autosizer.applyDimensions, text layout
+      // application, and the shader setter itself.
+      updateType |= UpdateType.RenderState;
 
       //only propagate children updates if not autosizing
       if ((updateType & UpdateType.Autosize) === 0) {
@@ -2232,7 +2238,9 @@ export class CoreNode extends EventEmitter {
     const props = this.props;
     if (props.w !== value) {
       props.w = value;
-      let updateType = UpdateType.Local;
+      // Dimensions feed shader uniforms (e.g. factored corner radius), so a
+      // resize must recompute them; see the Global-update branch in update().
+      let updateType = UpdateType.Local | UpdateType.RecalcUniforms;
 
       if (
         props.texture !== null &&
@@ -2262,7 +2270,9 @@ export class CoreNode extends EventEmitter {
     const props = this.props;
     if (props.h !== value) {
       props.h = value;
-      let updateType = UpdateType.Local;
+      // Dimensions feed shader uniforms (e.g. factored corner radius), so a
+      // resize must recompute them; see the Global-update branch in update().
+      let updateType = UpdateType.Local | UpdateType.RecalcUniforms;
 
       if (
         props.texture !== null &&

@@ -1180,4 +1180,87 @@ describe('set color()', () => {
       expect(node.clippingRect.h).toBe(30);
     });
   });
+
+  describe('RecalcUniforms scoping', () => {
+    const makeAttachedNode = () => {
+      // Fresh stage per node: earlier tests can mutate the shared stage
+      // mock's bound objects through by-reference strictBound assignment
+      // in createRenderBounds.
+      const localStage = mock<Stage>({
+        strictBound: createBound(0, 0, 200, 200),
+        preloadBound: createBound(0, 0, 200, 200),
+        defaultTexture: {
+          state: 'loaded',
+        },
+        renderer: mock<CoreRenderer>() as CoreRenderer,
+      });
+      const parent = new CoreNode(localStage, defaultProps());
+      parent.globalTransform = Matrix3d.identity();
+      parent.worldAlpha = 1;
+
+      const node = new CoreNode(
+        localStage,
+        defaultProps({ parent, w: 100, h: 100 }),
+      );
+      node.alpha = 1;
+      return node;
+    };
+
+    it('should not set RecalcUniforms on pure translation', () => {
+      const node = makeAttachedNode();
+      node.update(0, clippingRect);
+
+      node.x = 50;
+      node.y = 25;
+
+      expect(node.updateType & UpdateType.Local).toBe(UpdateType.Local);
+      expect(node.updateType & UpdateType.RecalcUniforms).toBe(0);
+    });
+
+    it('should set RecalcUniforms when w changes', () => {
+      const node = makeAttachedNode();
+      node.update(0, clippingRect);
+
+      node.w = 150;
+
+      expect(node.updateType & UpdateType.RecalcUniforms).toBe(
+        UpdateType.RecalcUniforms,
+      );
+    });
+
+    it('should set RecalcUniforms when h changes', () => {
+      const node = makeAttachedNode();
+      node.update(0, clippingRect);
+
+      node.h = 75;
+
+      expect(node.updateType & UpdateType.RecalcUniforms).toBe(
+        UpdateType.RecalcUniforms,
+      );
+    });
+
+    it('should run the shader updater on resize but not on translation', () => {
+      const node = makeAttachedNode();
+      const shader = {
+        shaderKey: 'test',
+        update: vi.fn(),
+        attachNode: vi.fn(),
+        time: undefined,
+      };
+      // Assignment raises RecalcUniforms | IsRenderable via the setter
+      node.shader = shader as never;
+      node.update(0, clippingRect);
+      expect(shader.update).toHaveBeenCalledTimes(1);
+
+      // Pure translation: no uniform recompute
+      node.x = 50;
+      node.update(0, clippingRect);
+      expect(shader.update).toHaveBeenCalledTimes(1);
+
+      // Resize: uniforms depend on dimensions, must recompute
+      node.w = 150;
+      node.update(0, clippingRect);
+      expect(shader.update).toHaveBeenCalledTimes(2);
+    });
+  });
 });
