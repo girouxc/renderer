@@ -471,7 +471,12 @@ export class WebGlRenderer extends CoreRenderer {
     }
 
     const props = node.props;
-    let tx = props.texture || this.stage.defaultTexture!;
+    // While a placeholder is showing, the quad samples the shared 1x1 white
+    // texture tinted by the node's premultiplied placeholder color.
+    let tx =
+      node.placeholderActive === true
+        ? this.stage.defaultTexture!
+        : props.texture || this.stage.defaultTexture!;
 
     if (tx.type === TextureType.subTexture) {
       tx = (tx as SubTexture).parentTexture;

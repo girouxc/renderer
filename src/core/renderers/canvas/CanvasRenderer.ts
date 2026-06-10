@@ -52,7 +52,13 @@ export class CanvasRenderer extends CoreRenderer {
     const ctx = this.context;
     const { tx, ty, ta, tb, tc, td } = node.globalTransform!;
     const clippingRect = node.clippingRect;
-    let texture = (node.props.texture || this.stage.defaultTexture) as Texture;
+    // While a placeholder is showing, render the color-rect path (the default
+    // ColorTexture) tinted by the node's premultiplied placeholder color.
+    let texture = (
+      node.placeholderActive === true
+        ? this.stage.defaultTexture
+        : node.props.texture || this.stage.defaultTexture
+    ) as Texture;
     // The Canvas2D renderer only supports image textures, no textures are used for color blocks
     if (texture !== null) {
       const textureType = texture.type;

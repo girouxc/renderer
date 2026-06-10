@@ -393,6 +393,23 @@ export interface CoreNodeProps {
    */
   colorBl: number;
   /**
+   * Placeholder color shown while the Node's texture is not yet loaded.
+   *
+   * @remarks
+   * When set to a non-zero color and the Node has a texture (e.g. {@link src}),
+   * the Node renders a solid rectangle of this color until the texture
+   * finishes loading, instead of rendering nothing. The placeholder renders
+   * through the Node's shader, so rounded corners and borders apply to it.
+   * It also shows again if the texture is freed under memory pressure (until
+   * the reload completes) and remains if the texture permanently fails.
+   *
+   * The color value is a number in the format 0xRRGGBBAA. Set to `0` to
+   * disable (default). Has no effect on Nodes without a texture.
+   *
+   * @default `0`
+   */
+  placeholderColor: number;
+  /**
    * The Node's parent Node.
    *
    * @remarks
@@ -793,6 +810,15 @@ export class CoreNode extends EventEmitter {
   private hasColorProps = false;
   public textureLoaded = false;
 
+  /**
+   * True while this node should render its `placeholderColor` instead of its
+   * texture: `placeholderColor` is non-zero, a texture is set, and that
+   * texture is not loaded. Read by the renderers' quad path to substitute the
+   * stage's default (1x1 white) texture. Maintained by
+   * {@link updatePlaceholderActive} — never written elsewhere.
+   */
+  public placeholderActive = false;
+
   public updateType = UpdateType.All;
   public childUpdateType = UpdateType.None;
 
@@ -953,6 +979,31 @@ export class CoreNode extends EventEmitter {
   }
 
   //#region Textures
+  /**
+   * Recompute {@link placeholderActive} after any of its inputs changed
+   * (placeholderColor, texture, textureLoaded).
+   *
+   * @remarks
+   * On a toggle this raises `PremultipliedColors` (the quad's vertex colors
+   * switch between the placeholder color and the regular color props — this
+   * also marks the quad dirty) and `IsRenderable` (a loading texture with a
+   * placeholder is renderable). Both are processed in the same frame's update
+   * pass, before quads are submitted.
+   */
+  private updatePlaceholderActive(): void {
+    const active =
+      this.props.placeholderColor !== 0 &&
+      this.props.texture !== null &&
+      this.textureLoaded === false;
+
+    if (active !== this.placeholderActive) {
+      this.placeholderActive = active;
+      this.setUpdateType(
+        UpdateType.PremultipliedColors | UpdateType.IsRenderable,
+      );
+    }
+  }
+
   loadTexture(): void {
     if (this.props.texture === null) {
       return;
@@ -1023,6 +1074,7 @@ export class CoreNode extends EventEmitter {
     }
 
     this.textureLoaded = true;
+    this.updatePlaceholderActive();
     this.setUpdateType(UpdateType.IsRenderable);
 
     // Texture was loaded. In case the RAF loop has already stopped, we request
@@ -1057,9 +1109,12 @@ export class CoreNode extends EventEmitter {
 
   private onTextureFailed: TextureFailedEventHandler = (_, error) => {
     // immediately set isRenderable to false, so that we handle the error
-    // without waiting for the next frame loop
+    // without waiting for the next frame loop. With a placeholder set, the
+    // same frame's update pass recomputes this to true and renders the
+    // placeholder instead.
     this.textureLoaded = false;
     this.isRenderable = false;
+    this.updatePlaceholderActive();
     this.updateTextureOwnership(false);
     this.setUpdateType(UpdateType.IsRenderable);
 
@@ -1081,9 +1136,12 @@ export class CoreNode extends EventEmitter {
 
   private onTextureFreed: TextureFreedEventHandler = () => {
     // immediately set isRenderable to false, so that we handle the error
-    // without waiting for the next frame loop
+    // without waiting for the next frame loop. With a placeholder set, the
+    // same frame's update pass recomputes this to true and renders the
+    // placeholder while the texture reloads.
     this.textureLoaded = false;
     this.isRenderable = false;
+    this.updatePlaceholderActive();
     this.updateTextureOwnership(false);
     this.setUpdateType(UpdateType.IsRenderable);
 
@@ -1426,27 +1484,39 @@ export class CoreNode extends EventEmitter {
     if (updateType & UpdateType.PremultipliedColors) {
       const alpha = this.worldAlpha;
 
-      const tl = props.colorTl;
-      const tr = props.colorTr;
-      const bl = props.colorBl;
-      const br = props.colorBr;
-
-      // Fast equality check (covers all 4 corners)
-      const same = tl === tr && tl === bl && tl === br;
-
-      const merged = premultiplyColorABGR(tl, alpha);
-
-      this.premultipliedColorTl = merged;
-
-      if (same === true) {
-        this.premultipliedColorTr =
+      if (this.placeholderActive === true) {
+        // Placeholder rendering: all four corners take the placeholder color.
+        // The quad samples the stage's default 1x1 white texture, so this is
+        // exactly the color-rect path.
+        const merged = premultiplyColorABGR(props.placeholderColor, alpha);
+        this.premultipliedColorTl =
+          this.premultipliedColorTr =
           this.premultipliedColorBl =
           this.premultipliedColorBr =
             merged;
       } else {
-        this.premultipliedColorTr = premultiplyColorABGR(tr, alpha);
-        this.premultipliedColorBl = premultiplyColorABGR(bl, alpha);
-        this.premultipliedColorBr = premultiplyColorABGR(br, alpha);
+        const tl = props.colorTl;
+        const tr = props.colorTr;
+        const bl = props.colorBl;
+        const br = props.colorBr;
+
+        // Fast equality check (covers all 4 corners)
+        const same = tl === tr && tl === bl && tl === br;
+
+        const merged = premultiplyColorABGR(tl, alpha);
+
+        this.premultipliedColorTl = merged;
+
+        if (same === true) {
+          this.premultipliedColorTr =
+            this.premultipliedColorBl =
+            this.premultipliedColorBr =
+              merged;
+        } else {
+          this.premultipliedColorTr = premultiplyColorABGR(tr, alpha);
+          this.premultipliedColorBl = premultiplyColorABGR(bl, alpha);
+          this.premultipliedColorBr = premultiplyColorABGR(br, alpha);
+        }
       }
     }
 
@@ -1760,15 +1830,18 @@ export class CoreNode extends EventEmitter {
       // preemptive check for failed textures this will mark the current node as non-renderable
       // and will prevent further checks until the texture is reloaded or retry is reset on the texture
       if (this.texture.retryCount > this.texture.maxRetryCount) {
-        // texture has failed to load, we cannot render
+        // texture has failed to load, we cannot render the texture itself —
+        // but a placeholder color still renders in its place
         this.updateTextureOwnership(false);
-        this.setRenderable(false);
+        this.setRenderable(this.placeholderActive);
         return;
       }
 
       needsTextureOwnership = true;
-      // Use cached boolean instead of string comparison
-      newIsRenderable = this.textureLoaded;
+      // Use cached boolean instead of string comparison; a placeholder
+      // renders while the texture is loading
+      newIsRenderable =
+        this.textureLoaded === true || this.placeholderActive === true;
     } else if (
       // check shader
       (this.props.shader !== this.stage.renderer.getDefaultShaderNode() ||
@@ -2055,6 +2128,9 @@ export class CoreNode extends EventEmitter {
   }
 
   get renderTexture(): Texture | null {
+    if (this.placeholderActive === true) {
+      return this.stage.defaultTexture;
+    }
     return this.props.texture || this.stage.defaultTexture;
   }
 
@@ -2524,6 +2600,24 @@ export class CoreNode extends EventEmitter {
     this.setUpdateType(UpdateType.PremultipliedColors);
   }
 
+  get placeholderColor(): number {
+    return this.props.placeholderColor;
+  }
+
+  set placeholderColor(value: number) {
+    const p = this.props;
+    if (p.placeholderColor === value) return;
+
+    p.placeholderColor = value;
+    this.updatePlaceholderActive();
+
+    // If the placeholder is (still) showing, the new color must reach the
+    // quad buffer even though the active state did not toggle.
+    if (this.placeholderActive === true) {
+      this.setUpdateType(UpdateType.PremultipliedColors);
+    }
+  }
+
   get colorTop(): number {
     return this.props.colorTop;
   }
@@ -2944,6 +3038,7 @@ export class CoreNode extends EventEmitter {
     this.textureCoords = undefined;
     this.props.texture = value;
     this.textureLoaded = value !== null && value.state === 'loaded';
+    this.updatePlaceholderActive();
 
     if (value !== null) {
       if (this.autosizer !== null) {

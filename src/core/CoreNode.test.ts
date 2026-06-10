@@ -7,6 +7,8 @@ import { type TextureOptions } from './CoreTextureManager.js';
 import { createBound } from './lib/utils.js';
 import { ImageTexture } from './textures/ImageTexture.js';
 import { Matrix3d } from './lib/Matrix3d.js';
+import { EventEmitter } from '../common/EventEmitter.js';
+import { premultiplyColorABGR } from '../utils.js';
 
 describe('set color()', () => {
   const defaultProps = (overrides?: Partial<CoreNodeProps>): CoreNodeProps => ({
@@ -23,6 +25,7 @@ describe('set color()', () => {
     colorTl: 0,
     colorTop: 0,
     colorTr: 0,
+    placeholderColor: 0,
     h: 0,
     mount: 0,
     mountX: 0,
@@ -1261,6 +1264,203 @@ describe('set color()', () => {
       node.w = 150;
       node.update(0, clippingRect);
       expect(shader.update).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('placeholderColor', () => {
+    // A texture fake on a real EventEmitter so CoreNode's loadTextureTask
+    // subscribes for real and we can drive the loaded/freed/failed handler
+    // chain by emitting, like the engine does.
+    function emittingTexture(state: string): ImageTexture & {
+      emit: (event: string, data?: unknown) => void;
+    } {
+      return Object.assign(new EventEmitter(), {
+        state,
+        preventCleanup: false,
+        retryCount: 0,
+        maxRetryCount: 1,
+        dimensions: { w: 100, h: 100 },
+        setRenderableOwner: vi.fn(),
+      }) as unknown as ImageTexture & {
+        emit: (event: string, data?: unknown) => void;
+      };
+    }
+
+    function visibleNode(): CoreNode {
+      const parent = new CoreNode(stage, defaultProps());
+      parent.globalTransform = Matrix3d.identity();
+      parent.worldAlpha = 1;
+
+      const node = new CoreNode(stage, defaultProps({ parent }));
+      node.alpha = 1;
+      node.x = 0;
+      node.y = 0;
+      node.w = 100;
+      node.h = 100;
+      return node;
+    }
+
+    // Flush the queueMicrotask(loadTextureTask) so listeners attach.
+    const flushMicrotasks = () => Promise.resolve();
+
+    it('renders the placeholder while the texture is loading', () => {
+      const node = visibleNode();
+      node.placeholderColor = 0x336699ff;
+      node.texture = emittingTexture('initial');
+
+      node.update(0, clippingRect);
+
+      expect(node.placeholderActive).toBe(true);
+      expect(node.isRenderable).toBe(true);
+      expect(node.renderTexture).toBe(stage.defaultTexture);
+
+      const expected = premultiplyColorABGR(0x336699ff, 1);
+      expect(node.premultipliedColorTl).toBe(expected);
+      expect(node.premultipliedColorTr).toBe(expected);
+      expect(node.premultipliedColorBl).toBe(expected);
+      expect(node.premultipliedColorBr).toBe(expected);
+    });
+
+    it('is inactive without a placeholderColor (loading renders nothing)', () => {
+      const node = visibleNode();
+      node.texture = emittingTexture('initial');
+
+      node.update(0, clippingRect);
+
+      expect(node.placeholderActive).toBe(false);
+      expect(node.isRenderable).toBe(false);
+    });
+
+    it('is inactive without a texture (color-only nodes are unaffected)', () => {
+      const node = visibleNode();
+      node.placeholderColor = 0x336699ff;
+
+      node.update(0, clippingRect);
+
+      expect(node.placeholderActive).toBe(false);
+    });
+
+    it('switches to the texture and regular colors once loaded', async () => {
+      const node = visibleNode();
+      node.color = 0xffffffff;
+      node.placeholderColor = 0x336699ff;
+      const texture = emittingTexture('initial');
+      node.texture = texture;
+      node.update(0, clippingRect);
+      expect(node.renderTexture).toBe(stage.defaultTexture);
+
+      await flushMicrotasks();
+      (texture as { state: string }).state = 'loaded';
+      texture.emit('loaded', { w: 100, h: 100 });
+      node.isQuadDirty = false;
+      node.update(1, clippingRect);
+
+      expect(node.placeholderActive).toBe(false);
+      expect(node.isRenderable).toBe(true);
+      expect(node.renderTexture).toBe(texture);
+      expect(node.premultipliedColorTl).toBe(
+        premultiplyColorABGR(0xffffffff, 1),
+      );
+      // The color switch must reach the GPU quad buffer
+      expect(node.isQuadDirty).toBe(true);
+    });
+
+    it('shows the placeholder again while a freed texture reloads', async () => {
+      const node = visibleNode();
+      node.placeholderColor = 0x336699ff;
+      const texture = emittingTexture('initial');
+      node.texture = texture;
+      node.update(0, clippingRect);
+
+      await flushMicrotasks();
+      (texture as { state: string }).state = 'loaded';
+      texture.emit('loaded', { w: 100, h: 100 });
+      node.update(1, clippingRect);
+      expect(node.placeholderActive).toBe(false);
+
+      (texture as { state: string }).state = 'freed';
+      texture.emit('freed');
+      node.update(2, clippingRect);
+
+      expect(node.placeholderActive).toBe(true);
+      expect(node.isRenderable).toBe(true);
+      expect(node.renderTexture).toBe(stage.defaultTexture);
+      expect(node.premultipliedColorTl).toBe(
+        premultiplyColorABGR(0x336699ff, 1),
+      );
+    });
+
+    it('keeps the placeholder when the texture permanently fails', async () => {
+      const node = visibleNode();
+      node.placeholderColor = 0x336699ff;
+      const texture = emittingTexture('initial');
+      node.texture = texture;
+      node.update(0, clippingRect);
+
+      await flushMicrotasks();
+      (texture as { state: string }).state = 'failed';
+      (texture as { retryCount: number }).retryCount = 2; // > maxRetryCount (1)
+      texture.emit('failed', new Error('404'));
+      node.update(1, clippingRect);
+
+      expect(node.placeholderActive).toBe(true);
+      expect(node.isRenderable).toBe(true);
+      expect(node.renderTexture).toBe(stage.defaultTexture);
+    });
+
+    it('a permanently failed texture without a placeholder stays non-renderable', async () => {
+      const node = visibleNode();
+      const texture = emittingTexture('initial');
+      node.texture = texture;
+      node.update(0, clippingRect);
+
+      await flushMicrotasks();
+      (texture as { state: string }).state = 'failed';
+      (texture as { retryCount: number }).retryCount = 2;
+      texture.emit('failed', new Error('404'));
+      node.update(1, clippingRect);
+
+      expect(node.isRenderable).toBe(false);
+    });
+
+    it('deactivates when placeholderColor is cleared while loading', () => {
+      const node = visibleNode();
+      node.placeholderColor = 0x336699ff;
+      node.texture = emittingTexture('initial');
+      node.update(0, clippingRect);
+      expect(node.isRenderable).toBe(true);
+
+      node.placeholderColor = 0;
+      node.update(1, clippingRect);
+
+      expect(node.placeholderActive).toBe(false);
+      expect(node.isRenderable).toBe(false);
+    });
+
+    it('updates the shown color when placeholderColor changes while active', () => {
+      const node = visibleNode();
+      node.placeholderColor = 0x336699ff;
+      node.texture = emittingTexture('initial');
+      node.update(0, clippingRect);
+
+      node.placeholderColor = 0x993311ff;
+      node.update(1, clippingRect);
+
+      expect(node.premultipliedColorTl).toBe(
+        premultiplyColorABGR(0x993311ff, 1),
+      );
+    });
+
+    it('does not activate when the assigned texture is already loaded', () => {
+      const node = visibleNode();
+      node.placeholderColor = 0x336699ff;
+      const texture = emittingTexture('loaded');
+      node.texture = texture;
+
+      node.update(0, clippingRect);
+
+      expect(node.placeholderActive).toBe(false);
+      expect(node.renderTexture).toBe(texture);
     });
   });
 });
