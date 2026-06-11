@@ -220,6 +220,10 @@ async function runTest(
   // `?novao=true` forces the per-draw attribute-binding path (VAOs off) so the
   // VAO optimization can be A/B'd on a target device.
   const disableVertexArrayObject = urlParams.get('novao') === 'true';
+  // `?strictrender=false` restores legacy draw submission for bounds-margin
+  // nodes (renderOnlyInViewport defaults to true) so the clipped-quad
+  // overhead can be A/B'd with the ?debug=true overlay on a target device.
+  const legacyMarginRender = urlParams.get('strictrender') === 'false';
 
   const customSettings: Partial<RendererMainSettings> = {
     ...(typeof module.customSettings === 'function'
@@ -228,6 +232,7 @@ async function runTest(
     ...(globalTargetFPS !== undefined && { targetFPS: globalTargetFPS }),
     ...(debug && { enableContextSpy: true, fpsUpdateInterval: 500 }),
     ...(disableVertexArrayObject && { disableVertexArrayObject: true }),
+    ...(legacyMarginRender && { renderOnlyInViewport: false }),
   };
 
   const { renderer, appElement } = await initRenderer(

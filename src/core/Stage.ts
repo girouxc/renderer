@@ -97,6 +97,12 @@ export class Stage {
   public readonly renderer: CoreRenderer;
   public readonly root: CoreNode;
   public boundsMargin: [number, number, number, number];
+  /**
+   * When true, nodes inside the bounds margin but outside the viewport keep
+   * loading textures yet stay out of the render list. Read by
+   * `CoreNode.updateIsRenderable` on the scroll path.
+   */
+  public readonly renderOnlyInViewport: boolean;
   public readonly defShaderNode: CoreShaderNode | null = null;
   public strictBound: Bound;
   public preloadBound: Bound;
@@ -208,6 +214,7 @@ export class Stage {
     setBaselineMode(options.textBaselineMode);
 
     this.platform = platform;
+    this.renderOnlyInViewport = options.renderOnlyInViewport !== false;
 
     this.startTime = platform.getTimeStamp();
 

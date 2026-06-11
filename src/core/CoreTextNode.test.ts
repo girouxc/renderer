@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
 import { CoreTextNode, type CoreTextNodeProps } from './CoreTextNode.js';
+import { CoreNodeRenderState } from './CoreNode.js';
 import { Stage } from './Stage.js';
 import { CoreRenderer } from './renderers/CoreRenderer.js';
 import { createBound } from './lib/utils.js';
@@ -142,5 +143,65 @@ describe('CoreTextNode (canvas) clearing text', () => {
     // linger and get re-marked renderable by CoreNode.updateIsRenderable.
     expect(node.texture).toBe(null);
     expect(node.isRenderable).toBe(false);
+  });
+});
+
+describe('CoreTextNode (sdf) renderOnlyInViewport', () => {
+  const makeSdfRenderer = (): TextRenderer => {
+    const font = mock<FontHandler>({ type: 'sdf' });
+    return {
+      type: 'sdf',
+      font,
+      renderText: vi.fn(),
+      addQuads: vi.fn(),
+      renderQuads: vi.fn(),
+      init: vi.fn(),
+    } as unknown as TextRenderer;
+  };
+
+  function sdfNodeWithLayout(renderOnlyInViewport: boolean): CoreTextNode {
+    const stage = mock<Stage>({
+      strictBound: createBound(0, 0, 200, 200),
+      preloadBound: createBound(0, 0, 400, 200),
+      defaultTexture: { state: 'loaded' } as never,
+      defShaderNode: null as never,
+      renderer: mock<CoreRenderer>() as CoreRenderer,
+      renderOnlyInViewport,
+    });
+    const node = new CoreTextNode(
+      stage,
+      defaultProps({ text: 'Hello' }),
+      makeSdfRenderer(),
+    );
+    (node as unknown as { _cachedLayout: object })._cachedLayout = {};
+    node.worldAlpha = 1;
+    return node;
+  }
+
+  it('off: margin-ring SDF text is renderable (legacy behavior)', () => {
+    const node = sdfNodeWithLayout(false);
+    node.renderState = CoreNodeRenderState.InBounds;
+
+    node.updateIsRenderable();
+
+    expect(node.isRenderable).toBe(true);
+  });
+
+  it('on: margin-ring SDF text stays out of the render list', () => {
+    const node = sdfNodeWithLayout(true);
+    node.renderState = CoreNodeRenderState.InBounds;
+
+    node.updateIsRenderable();
+
+    expect(node.isRenderable).toBe(false);
+  });
+
+  it('on: viewport SDF text is renderable', () => {
+    const node = sdfNodeWithLayout(true);
+    node.renderState = CoreNodeRenderState.InViewport;
+
+    node.updateIsRenderable();
+
+    expect(node.isRenderable).toBe(true);
   });
 });

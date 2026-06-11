@@ -1463,4 +1463,146 @@ describe('set color()', () => {
       expect(node.renderTexture).toBe(texture);
     });
   });
+
+  describe('renderOnlyInViewport', () => {
+    // Viewport is 0..200; the preload (bounds-margin) ring extends to 400.
+    // A node at x=250 is InBounds (margin ring); at x=50 it is InViewport;
+    // at x=500 it is OutOfBounds.
+    function boundsStage(renderOnlyInViewport: boolean): Stage {
+      return mock<Stage>({
+        strictBound: createBound(0, 0, 200, 200),
+        preloadBound: createBound(0, 0, 400, 200),
+        defaultTexture: {
+          state: 'loaded',
+        },
+        renderer: mock<CoreRenderer>() as CoreRenderer,
+        renderOnlyInViewport,
+      });
+    }
+
+    function loadedTextureNode(stage: Stage, x: number): CoreNode {
+      const parent = new CoreNode(stage, defaultProps());
+      parent.globalTransform = Matrix3d.identity();
+      parent.worldAlpha = 1;
+
+      const node = new CoreNode(stage, defaultProps({ parent }));
+      node.alpha = 1;
+      node.x = x;
+      node.y = 0;
+      node.w = 100;
+      node.h = 100;
+      node.texture = mock<ImageTexture>({
+        state: 'loaded',
+        setRenderableOwner: vi.fn(),
+      });
+      node.textureLoaded = true;
+      return node;
+    }
+
+    it('off: a margin-ring node is renderable (legacy behavior)', () => {
+      const node = loadedTextureNode(boundsStage(false), 250);
+
+      node.update(0, clippingRect);
+
+      expect(node.isRenderable).toBe(true);
+    });
+
+    it('on: a margin-ring node is not renderable but still owns its texture', () => {
+      const node = loadedTextureNode(boundsStage(true), 250);
+
+      node.update(0, clippingRect);
+
+      expect(node.isRenderable).toBe(false);
+      // Ownership is the load trigger and cleanup protection — it must stay.
+      expect(node.texture!.setRenderableOwner).toHaveBeenCalledWith(
+        expect.anything(),
+        true,
+      );
+    });
+
+    it('on: a viewport node is renderable', () => {
+      const node = loadedTextureNode(boundsStage(true), 50);
+
+      node.update(0, clippingRect);
+
+      expect(node.isRenderable).toBe(true);
+    });
+
+    it('on: a node becomes renderable when it crosses into the viewport', () => {
+      const node = loadedTextureNode(boundsStage(true), 250);
+      node.update(0, clippingRect);
+      expect(node.isRenderable).toBe(false);
+
+      // Scroll it in.
+      node.x = 50;
+      node.update(1, clippingRect);
+      expect(node.isRenderable).toBe(true);
+
+      // And back out into the ring.
+      node.x = 250;
+      node.update(2, clippingRect);
+      expect(node.isRenderable).toBe(false);
+    });
+
+    it('on: an out-of-bounds node releases texture ownership', () => {
+      const node = loadedTextureNode(boundsStage(true), 500);
+
+      node.update(0, clippingRect);
+
+      expect(node.isRenderable).toBe(false);
+      expect(node.texture!.setRenderableOwner).not.toHaveBeenCalledWith(
+        expect.anything(),
+        true,
+      );
+    });
+
+    it('on: a margin-ring placeholder is gated the same way', () => {
+      const stage = boundsStage(true);
+      const parent = new CoreNode(stage, defaultProps());
+      parent.globalTransform = Matrix3d.identity();
+      parent.worldAlpha = 1;
+
+      const node = new CoreNode(stage, defaultProps({ parent }));
+      node.alpha = 1;
+      node.x = 250;
+      node.y = 0;
+      node.w = 100;
+      node.h = 100;
+      node.placeholderColor = 0x336699ff;
+      node.texture = mock<ImageTexture>({
+        state: 'initial',
+        setRenderableOwner: vi.fn(),
+      });
+
+      node.update(0, clippingRect);
+      expect(node.placeholderActive).toBe(true);
+      expect(node.isRenderable).toBe(false);
+
+      node.x = 50;
+      node.update(1, clippingRect);
+      expect(node.isRenderable).toBe(true);
+    });
+
+    it('on: color-only nodes in the margin ring are gated too', () => {
+      const stage = boundsStage(true);
+      const parent = new CoreNode(stage, defaultProps());
+      parent.globalTransform = Matrix3d.identity();
+      parent.worldAlpha = 1;
+
+      const node = new CoreNode(stage, defaultProps({ parent }));
+      node.alpha = 1;
+      node.x = 250;
+      node.y = 0;
+      node.w = 100;
+      node.h = 100;
+      node.color = 0xff0000ff;
+
+      node.update(0, clippingRect);
+      expect(node.isRenderable).toBe(false);
+
+      node.x = 50;
+      node.update(1, clippingRect);
+      expect(node.isRenderable).toBe(true);
+    });
+  });
 });

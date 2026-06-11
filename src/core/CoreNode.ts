@@ -1833,7 +1833,11 @@ export class CoreNode extends EventEmitter {
         // texture has failed to load, we cannot render the texture itself —
         // but a placeholder color still renders in its place
         this.updateTextureOwnership(false);
-        this.setRenderable(this.placeholderActive);
+        this.setRenderable(
+          this.placeholderActive === true &&
+            (this.stage.renderOnlyInViewport === false ||
+              this.renderState === CoreNodeRenderState.InViewport),
+        );
         return;
       }
 
@@ -1851,6 +1855,17 @@ export class CoreNode extends EventEmitter {
     ) {
       // This mean we have dimensions and a color set, so we can render a ColorTexture
       newIsRenderable = true;
+    }
+
+    // renderOnlyInViewport: nodes in the preload margin keep texture
+    // ownership above (so loading proceeds) but stay out of the render list
+    // until they actually intersect the viewport.
+    if (
+      newIsRenderable === true &&
+      this.stage.renderOnlyInViewport === true &&
+      this.renderState !== CoreNodeRenderState.InViewport
+    ) {
+      newIsRenderable = false;
     }
 
     this.updateTextureOwnership(needsTextureOwnership);

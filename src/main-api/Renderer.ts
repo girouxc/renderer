@@ -297,6 +297,30 @@ export interface RendererRuntimeSettings {
   boundsMargin: number | [number, number, number, number];
 
   /**
+   * Only submit quads for Nodes that intersect the visible viewport.
+   *
+   * @remarks
+   * Nodes inside the bounds margin (`boundsMargin`) but outside the visible
+   * viewport still update and still load their textures (the margin remains
+   * the preload runway), but they stay out of the render list until they
+   * actually intersect the viewport — no quad writes, texture binds, or draw
+   * calls for content the GPU would clip anyway.
+   *
+   * Set to `false` to restore the previous behavior, where margin-ring Nodes
+   * are fully rendered every frame and clipped by the GPU. That keeps
+   * render-list membership stable ahead of scrolling at the cost of
+   * per-frame CPU for the off-screen ring.
+   *
+   * Trade-offs when enabled: the `renderable` event and autosize patching
+   * fire at viewport entry instead of margin entry, render-list rebuilds
+   * move to the visible edge (same frequency, different timing), and
+   * margin-ring content inside RTT subtrees is skipped.
+   *
+   * @defaultValue `true`
+   */
+  renderOnlyInViewport: boolean;
+
+  /**
    * Factor to convert app-authored logical coorindates to device logical coordinates
    *
    * @remarks
@@ -722,6 +746,7 @@ export class RendererMain extends EventEmitter {
       appHeight: settings.appHeight || 1080,
       textureMemory: resolvedTxSettings,
       boundsMargin: settings.boundsMargin || 0,
+      renderOnlyInViewport: settings.renderOnlyInViewport ?? true,
       deviceLogicalPixelRatio: settings.deviceLogicalPixelRatio || 1,
       devicePhysicalPixelRatio:
         settings.devicePhysicalPixelRatio || this.windowDevicePixelRatio() || 1,
@@ -791,6 +816,7 @@ export class RendererMain extends EventEmitter {
       appWidth,
       appHeight,
       boundsMargin: settings.boundsMargin!,
+      renderOnlyInViewport: settings.renderOnlyInViewport!,
       clearColor: settings.clearColor!,
       canvas: this.canvas,
       deviceLogicalPixelRatio,

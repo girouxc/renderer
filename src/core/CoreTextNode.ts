@@ -227,9 +227,14 @@ export class CoreTextNode extends CoreNode implements CoreTextNodeProps {
       return;
     }
 
-    // For SDF, check if we have a cached layout
+    // For SDF, check if we have a cached layout. renderOnlyInViewport gates
+    // SDF text the same way CoreNode gates quads: margin-ring text stays out
+    // of the render list until it intersects the viewport.
     this.setRenderable(
-      this.checkBasicRenderability() === true && this._cachedLayout !== null,
+      this.checkBasicRenderability() === true &&
+        this._cachedLayout !== null &&
+        (this.stage.renderOnlyInViewport === false ||
+          this.renderState === CoreNodeRenderState.InViewport),
     );
   }
 
