@@ -13,6 +13,7 @@ import { premultiplyColorABGR } from '../utils.js';
 describe('set color()', () => {
   const defaultProps = (overrides?: Partial<CoreNodeProps>): CoreNodeProps => ({
     alpha: 0,
+    ignoreParentAlpha: false,
     autosize: false,
     boundsMargin: null,
     clipping: false,
@@ -261,6 +262,112 @@ describe('set color()', () => {
       node.update(2, clippingRect);
       expect(node.isRenderable).toBe(false);
       expect(eventCallback).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('ignoreParentAlpha', () => {
+    const makeParent = (worldAlpha: number) => {
+      const parent = new CoreNode(stage, defaultProps());
+      parent.globalTransform = Matrix3d.identity();
+      parent.worldAlpha = worldAlpha;
+      return parent;
+    };
+
+    it('multiplies parent world alpha by default', () => {
+      const parent = makeParent(0.5);
+      const node = new CoreNode(stage, defaultProps({ parent, alpha: 0.8 }));
+
+      node.update(0, clippingRect);
+
+      expect(node.worldAlpha).toBeCloseTo(0.4);
+    });
+
+    it('uses own alpha only when enabled', () => {
+      const parent = makeParent(0.5);
+      const node = new CoreNode(
+        stage,
+        defaultProps({ parent, alpha: 0.8, ignoreParentAlpha: true }),
+      );
+
+      node.update(0, clippingRect);
+
+      expect(node.worldAlpha).toBe(0.8);
+    });
+
+    it('keeps its own world alpha while the parent fades toward 0', () => {
+      const parent = makeParent(0.01);
+      const node = new CoreNode(
+        stage,
+        defaultProps({ parent, alpha: 1, ignoreParentAlpha: true }),
+      );
+      node.w = 100;
+      node.h = 100;
+      node.color = 0xffffffff;
+
+      node.update(0, clippingRect);
+
+      expect(node.worldAlpha).toBe(1);
+      expect(node.isRenderable).toBe(true);
+    });
+
+    it('premultiplies colors with the node own alpha when enabled', () => {
+      const parent = makeParent(0.25);
+      const node = new CoreNode(
+        stage,
+        defaultProps({ parent, alpha: 0.8, ignoreParentAlpha: true }),
+      );
+      node.w = 100;
+      node.h = 100;
+      node.color = 0xff0000ff;
+
+      node.update(0, clippingRect);
+
+      expect(node.premultipliedColorTl).toBe(
+        premultiplyColorABGR(0xff0000ff, 0.8),
+      );
+    });
+
+    it('toggling the setter recomputes world alpha', () => {
+      const parent = makeParent(0.5);
+      const node = new CoreNode(stage, defaultProps({ parent, alpha: 0.8 }));
+
+      node.update(0, clippingRect);
+      expect(node.worldAlpha).toBeCloseTo(0.4);
+
+      node.ignoreParentAlpha = true;
+      node.update(1, clippingRect);
+      expect(node.worldAlpha).toBe(0.8);
+
+      node.ignoreParentAlpha = false;
+      node.update(2, clippingRect);
+      expect(node.worldAlpha).toBeCloseTo(0.4);
+    });
+
+    it('setting the same value does not flag an update', () => {
+      const node = new CoreNode(stage, defaultProps());
+      const updateTypeBefore = node.updateType;
+
+      node.ignoreParentAlpha = false;
+
+      expect(node.updateType).toBe(updateTypeBefore);
+    });
+
+    it('descendants inherit the node world alpha as usual', () => {
+      const parent = makeParent(0.5);
+      const node = new CoreNode(
+        stage,
+        defaultProps({ parent, alpha: 0.8, ignoreParentAlpha: true }),
+      );
+      const child = new CoreNode(
+        stage,
+        defaultProps({ parent: node, alpha: 0.5 }),
+      );
+
+      node.update(0, clippingRect);
+      child.update(0, clippingRect);
+
+      expect(node.worldAlpha).toBe(0.8);
+      expect(child.worldAlpha).toBeCloseTo(0.4);
     });
   });
 

@@ -17,6 +17,7 @@ const defaultProps = (
 ): CoreTextNodeProps => ({
   // CoreNodeProps
   alpha: 1,
+  ignoreParentAlpha: false,
   autosize: false,
   boundsMargin: null,
   clipping: false,

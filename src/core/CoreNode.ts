@@ -136,6 +136,7 @@ export enum UpdateType {
    * @remarks
    * CoreNode Properties Updated:
    * - `worldAlpha` = `parent.worldAlpha` * `alpha`
+   *   (or just `alpha` when `ignoreParentAlpha` is enabled)
    */
   WorldAlpha = 64,
 
@@ -250,6 +251,29 @@ export interface CoreNodeProps {
    * @default `1`
    */
   alpha: number;
+  /**
+   * When enabled, the Node's world alpha is computed from its own
+   * {@link alpha} only, ignoring the alpha inherited from its ancestors.
+   *
+   * @remarks
+   * Normally `worldAlpha = parent.worldAlpha * alpha`, so fading a parent
+   * fades every descendant with it. With `ignoreParentAlpha` enabled this
+   * Node keeps rendering at its own alpha while its parent (and the rest of
+   * the subtree) fades.
+   *
+   * Subtrees whose world alpha reaches exactly 0 are culled from rendering
+   * entirely, so this Node still disappears once an ancestor hits alpha 0 —
+   * the prop only has an effect while every ancestor's alpha is above 0.
+   * This keeps the fully-transparent subtree cull free of bookkeeping.
+   *
+   * Descendants of this Node inherit from its world alpha as usual.
+   *
+   * Has no effect inside a render-to-texture subtree: the RTT root's
+   * composited quad is still faded as a single unit by its own world alpha.
+   *
+   * @default `false`
+   */
+  ignoreParentAlpha: boolean;
   /**
    * Autosize
    *
@@ -1453,7 +1477,10 @@ export class CoreNode extends EventEmitter {
     }
 
     if (updateType & UpdateType.WorldAlpha) {
-      this.worldAlpha = parent.worldAlpha * this.props.alpha;
+      this.worldAlpha =
+        props.ignoreParentAlpha === true
+          ? props.alpha
+          : parent.worldAlpha * props.alpha;
       updateType |=
         UpdateType.PremultipliedColors |
         UpdateType.Children |
@@ -2514,6 +2541,24 @@ export class CoreNode extends EventEmitter {
 
   set alpha(value: number) {
     this.props.alpha = value;
+    this.setUpdateType(
+      UpdateType.PremultipliedColors |
+        UpdateType.WorldAlpha |
+        UpdateType.Children |
+        UpdateType.IsRenderable,
+    );
+    this.childUpdateType |= UpdateType.WorldAlpha;
+  }
+
+  get ignoreParentAlpha(): boolean {
+    return this.props.ignoreParentAlpha;
+  }
+
+  set ignoreParentAlpha(value: boolean) {
+    if (this.props.ignoreParentAlpha === value) {
+      return;
+    }
+    this.props.ignoreParentAlpha = value;
     this.setUpdateType(
       UpdateType.PremultipliedColors |
         UpdateType.WorldAlpha |
