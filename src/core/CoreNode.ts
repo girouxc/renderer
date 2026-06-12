@@ -46,7 +46,7 @@ import type { IAnimationController } from '../common/IAnimationController.js';
 import { createAnimation } from './animations/CoreAnimation.js';
 import type { CoreShaderNode } from './renderers/CoreShaderNode.js';
 import { AutosizeMode, Autosizer } from './Autosizer.js';
-import { removeChild } from './lib/collectionUtils.js';
+import { removeChild, sortByZIndexStable } from './lib/collectionUtils.js';
 
 export enum CoreNodeRenderState {
   Init = 0,
@@ -62,11 +62,6 @@ const NO_CLIPPING_RECT: RectWithValid = {
   h: 0,
   valid: false,
 };
-
-// Hoisted so `sortChildren` doesn't allocate a fresh comparator closure on
-// every z-index reorder.
-const compareZIndex = (a: CoreNode, b: CoreNode): number =>
-  a.props.zIndex - b.props.zIndex;
 
 const CoreNodeRenderStateMap: Map<CoreNodeRenderState, string> = new Map();
 CoreNodeRenderStateMap.set(CoreNodeRenderState.Init, 'init');
@@ -2207,7 +2202,7 @@ export class CoreNode extends EventEmitter {
   }
 
   sortChildren() {
-    this.children.sort(compareZIndex);
+    sortByZIndexStable(this.children);
     this.stage.requestRenderListUpdate();
   }
 

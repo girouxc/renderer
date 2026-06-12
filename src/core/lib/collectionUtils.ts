@@ -1,44 +1,23 @@
 import type { CoreNode } from '../CoreNode.js';
 
-//Bucket sort implementation for sorting CoreNode arrays by zIndex
-export const bucketSortByZIndex = (nodes: CoreNode[], min: number): void => {
-  const buckets: CoreNode[][] = [];
-  const bucketIndices: number[] = [];
-  //distribute nodes into buckets
-  for (let i = 0; i < nodes.length; i++) {
+// Stable in-place sort by zIndex. Array.prototype.sort is not stable on
+// Chrome < 70 (V8 quicksorts arrays longer than 10), and equal-zIndex
+// siblings must keep insertion order or paint order silently reshuffles.
+// Children arrays are small and nearly sorted (kept sorted; a re-sort
+// usually follows a single zIndex change), so insertion sort is O(n) in
+// practice and allocation-free.
+export const sortByZIndexStable = (nodes: CoreNode[]): void => {
+  const len = nodes.length;
+  for (let i = 1; i < len; i++) {
     const node = nodes[i]!;
-    const index = node.props.zIndex - min;
-    //create bucket if it doesn't exist
-    if (buckets[index] === undefined) {
-      buckets[index] = [];
-      bucketIndices.push(index);
-    }
-    buckets[index]!.push(node);
-  }
-
-  //sort each bucket using insertion sort
-  for (let i = 1; i < bucketIndices.length; i++) {
-    const key = bucketIndices[i]!;
+    const z = node.props.zIndex;
     let j = i - 1;
-    while (j >= 0 && bucketIndices[j]! > key) {
-      bucketIndices[j + 1] = bucketIndices[j]!;
+    while (j >= 0 && nodes[j]!.props.zIndex > z) {
+      nodes[j + 1] = nodes[j]!;
       j--;
     }
-    bucketIndices[j + 1] = key;
+    nodes[j + 1] = node;
   }
-
-  //flatten buckets
-  let idx = 0;
-  for (let i = 0; i < bucketIndices.length; i++) {
-    const bucket = buckets[bucketIndices[i]!]!;
-    for (let j = 0; j < bucket.length; j++) {
-      nodes[idx++] = bucket[j]!;
-    }
-  }
-
-  //clean up
-  buckets.length = 0;
-  bucketIndices.length = 0;
 };
 
 export const incrementalRepositionByZIndex = (
