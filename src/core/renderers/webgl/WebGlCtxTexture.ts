@@ -161,10 +161,11 @@ export class WebGlCtxTexture extends CoreContextTexture {
       );
     }
 
-    // Set to a 1x1 transparent texture
-    glw.texImage2D(0, glw.RGBA, 1, 1, 0, glw.RGBA, glw.UNSIGNED_BYTE, null);
-    this.setTextureMemUse(TRANSPARENT_TEXTURE_DATA.byteLength);
-
+    // No placeholder upload here: every branch below fully (re)uploads the
+    // texture before this method returns, and there is no `await` in between,
+    // so no frame can render an intermediate 1x1. The empty-texture case
+    // (`tdata === null`) does its own 1x1 upload. Uploading a throwaway 1x1
+    // first would be a wasted texImage2D + setTextureMemUse per texture.
     let w = 0;
     let h = 0;
 
