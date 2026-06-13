@@ -830,6 +830,14 @@ export class CoreNode extends EventEmitter {
   public textureLoaded = false;
 
   /**
+   * Last ownership value sent to the current texture via
+   * {@link updateTextureOwnership}. Per (node, texture) pair — must reset to
+   * `false` whenever the texture is swapped or released, or a stale `true`
+   * would skip the re-registration that triggers `Texture.load()`.
+   */
+  private textureOwnership = false;
+
+  /**
    * True while this node should render its `placeholderColor` instead of its
    * texture: `placeholderColor` is non-zero, a texture is set, and that
    * texture is not loaded. Read by the renderers' quad path to substitute the
@@ -1085,6 +1093,7 @@ export class CoreNode extends EventEmitter {
     texture.off('failed', this.onTextureFailed);
     texture.off('freed', this.onTextureFreed);
     texture.setRenderableOwner(this._id, false);
+    this.textureOwnership = false;
   }
 
   protected onTextureLoaded: TextureLoadedEventHandler = (_, dimensions) => {
@@ -1918,6 +1927,10 @@ export class CoreNode extends EventEmitter {
    * Changes the renderable state of the node.
    */
   updateTextureOwnership(isRenderable: boolean) {
+    if (this.textureOwnership === isRenderable) {
+      return;
+    }
+    this.textureOwnership = isRenderable;
     this.texture?.setRenderableOwner(this._id, isRenderable);
   }
 
@@ -3100,6 +3113,7 @@ export class CoreNode extends EventEmitter {
         this.autosizer.setMode(AutosizeMode.Texture); // Set to texture size mode
       }
       value.setRenderableOwner(this._id, this.isRenderable);
+      this.textureOwnership = this.isRenderable;
       this.loadTexture();
     }
 

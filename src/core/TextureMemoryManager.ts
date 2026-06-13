@@ -349,7 +349,7 @@ export class TextureMemoryManager {
       if (
         evictable === true &&
         texture.preventCleanup === false &&
-        texture.renderableOwners.length === 0 &&
+        texture.renderableOwners.size === 0 &&
         texture.hasListeners() === false
       ) {
         this.destroyTexture(texture);

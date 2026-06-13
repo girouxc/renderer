@@ -175,7 +175,7 @@ function freedCachedTexture(cacheKey: string): Texture & {
     state: 'freed',
     type: TextureType.image,
     preventCleanup: false,
-    renderableOwners: [],
+    renderableOwners: new Set<string | number>(),
     cacheKey,
     free: vi.fn(),
     destroy: vi.fn(),
@@ -206,7 +206,7 @@ describe('TextureMemoryManager — orphaned freed texture eviction', () => {
   it('keeps a freed texture that still has renderable owners', () => {
     const { mgr, keyCache } = makeManager();
     const texture = freedCachedTexture('img:poster.png');
-    (texture.renderableOwners as unknown[]).push(1);
+    texture.renderableOwners.add(1);
     keyCache.set('img:poster.png', texture);
 
     mgr.cleanup();

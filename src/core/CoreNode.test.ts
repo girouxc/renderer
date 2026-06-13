@@ -1712,4 +1712,169 @@ describe('set color()', () => {
       expect(node.isRenderable).toBe(true);
     });
   });
+
+  describe('texture ownership cache', () => {
+    // Same shape as the placeholderColor texture fake: a real EventEmitter so
+    // loadTextureTask subscribes and we can drive freed/loaded by emitting.
+    function emittingTexture(state: string): ImageTexture & {
+      emit: (event: string, data?: unknown) => void;
+    } {
+      return Object.assign(new EventEmitter(), {
+        state,
+        preventCleanup: false,
+        retryCount: 0,
+        maxRetryCount: 1,
+        dimensions: { w: 100, h: 100 },
+        setRenderableOwner: vi.fn(),
+      }) as unknown as ImageTexture & {
+        emit: (event: string, data?: unknown) => void;
+      };
+    }
+
+    function visibleNode(): CoreNode {
+      const parent = new CoreNode(stage, defaultProps());
+      parent.globalTransform = Matrix3d.identity();
+      parent.worldAlpha = 1;
+
+      const node = new CoreNode(stage, defaultProps({ parent }));
+      node.alpha = 1;
+      node.x = 0;
+      node.y = 0;
+      node.w = 100;
+      node.h = 100;
+      return node;
+    }
+
+    const flushMicrotasks = () => Promise.resolve();
+
+    it('repeated updates with unchanged state call setRenderableOwner once', () => {
+      const node = visibleNode();
+      const texture = emittingTexture('loaded');
+      node.texture = texture;
+      node.textureLoaded = true;
+
+      // The texture setter registers ownership with the node's current
+      // isRenderable (false here), so the cache starts false.
+      expect(texture.setRenderableOwner).toHaveBeenCalledTimes(1);
+      expect(texture.setRenderableOwner).toHaveBeenLastCalledWith(
+        expect.anything(),
+        false,
+      );
+
+      node.update(0, clippingRect);
+      expect(texture.setRenderableOwner).toHaveBeenCalledTimes(2);
+      expect(texture.setRenderableOwner).toHaveBeenLastCalledWith(
+        expect.anything(),
+        true,
+      );
+
+      // Steady-state scroll: ownership unchanged, no further calls.
+      node.update(1, clippingRect);
+      node.update(2, clippingRect);
+      expect(texture.setRenderableOwner).toHaveBeenCalledTimes(2);
+    });
+
+    it('moving out of bounds releases ownership once, returning re-adds', () => {
+      const node = visibleNode();
+      const texture = emittingTexture('loaded');
+      node.texture = texture;
+      node.textureLoaded = true;
+
+      node.update(0, clippingRect);
+      expect(texture.setRenderableOwner).toHaveBeenLastCalledWith(
+        expect.anything(),
+        true,
+      );
+      const callsAfterFirstUpdate = (
+        texture.setRenderableOwner as ReturnType<typeof vi.fn>
+      ).mock.calls.length;
+
+      // Out of the 200x200 stage bounds entirely.
+      node.x = 1000;
+      node.update(1, clippingRect);
+      expect(texture.setRenderableOwner).toHaveBeenCalledTimes(
+        callsAfterFirstUpdate + 1,
+      );
+      expect(texture.setRenderableOwner).toHaveBeenLastCalledWith(
+        expect.anything(),
+        false,
+      );
+
+      // Still out of bounds: no repeated release.
+      node.update(2, clippingRect);
+      expect(texture.setRenderableOwner).toHaveBeenCalledTimes(
+        callsAfterFirstUpdate + 1,
+      );
+
+      // Back in view: re-registered exactly once.
+      node.x = 0;
+      node.update(3, clippingRect);
+      expect(texture.setRenderableOwner).toHaveBeenCalledTimes(
+        callsAfterFirstUpdate + 2,
+      );
+      expect(texture.setRenderableOwner).toHaveBeenLastCalledWith(
+        expect.anything(),
+        true,
+      );
+    });
+
+    it('swapping textures releases the old owner and registers the new one', () => {
+      const node = visibleNode();
+      const textureA = emittingTexture('loaded');
+      node.texture = textureA;
+      node.textureLoaded = true;
+      node.update(0, clippingRect);
+      expect(textureA.setRenderableOwner).toHaveBeenLastCalledWith(
+        expect.anything(),
+        true,
+      );
+
+      const textureB = emittingTexture('loaded');
+      node.texture = textureB;
+
+      // A is released via unloadTexture.
+      expect(textureA.setRenderableOwner).toHaveBeenLastCalledWith(
+        expect.anything(),
+        false,
+      );
+      // B is registered with the node's current renderable state (true),
+      // proving the cache reset on swap — a stale cache would skip this.
+      expect(textureB.setRenderableOwner).toHaveBeenCalledWith(
+        expect.anything(),
+        true,
+      );
+    });
+
+    it('freed texture is re-registered on the next update (reload trigger)', async () => {
+      const node = visibleNode();
+      const texture = emittingTexture('initial');
+      node.texture = texture;
+      node.update(0, clippingRect);
+
+      await flushMicrotasks();
+      (texture as { state: string }).state = 'loaded';
+      texture.emit('loaded', { w: 100, h: 100 });
+      node.update(1, clippingRect);
+      expect(texture.setRenderableOwner).toHaveBeenLastCalledWith(
+        expect.anything(),
+        true,
+      );
+
+      // Memory manager frees the texture: the node must drop ownership...
+      (texture as { state: string }).state = 'freed';
+      texture.emit('freed');
+      expect(texture.setRenderableOwner).toHaveBeenLastCalledWith(
+        expect.anything(),
+        false,
+      );
+
+      // ...and the next update pass re-adds it, which is what triggers
+      // Texture.load() for the reload. A stale cache would skip this call.
+      node.update(2, clippingRect);
+      expect(texture.setRenderableOwner).toHaveBeenLastCalledWith(
+        expect.anything(),
+        true,
+      );
+    });
+  });
 });

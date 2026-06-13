@@ -266,8 +266,9 @@ export class CoreTextNode extends CoreNode implements CoreTextNodeProps {
         this.setRenderable(false);
 
         if (this.renderState > CoreNodeRenderState.OutOfBounds) {
-          // We do want the texture to load immediately
-          this.texture.setRenderableOwner(this._id, true);
+          // We do want the texture to load immediately. Routed through
+          // updateTextureOwnership so the ownership cache stays in sync.
+          this.updateTextureOwnership(true);
         }
       }
     }

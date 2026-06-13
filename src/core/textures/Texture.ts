@@ -141,7 +141,7 @@ export abstract class Texture extends EventEmitter {
   // aggregate state
   public state: TextureState = 'initial';
 
-  readonly renderableOwners: any[] = [];
+  readonly renderableOwners: Set<string | number> = new Set();
 
   readonly renderable: boolean = false;
 
@@ -251,7 +251,7 @@ export abstract class Texture extends EventEmitter {
     }
 
     // Don't cleanup if there are still renderable owners
-    if (this.renderableOwners.length > 0) {
+    if (this.renderableOwners.size > 0) {
       return false;
     }
 
@@ -274,28 +274,25 @@ export abstract class Texture extends EventEmitter {
    * @param renderable
    */
   setRenderableOwner(owner: string | number, renderable: boolean): void {
-    const oldSize = this.renderableOwners.length;
-    const hasOwnerIndex = this.renderableOwners.indexOf(owner);
+    const owners = this.renderableOwners;
 
     if (renderable === true) {
-      if (hasOwnerIndex === -1) {
-        // Add the owner to the set
-        this.renderableOwners.push(owner);
+      if (owners.has(owner) === true) {
+        return;
       }
 
-      const newSize = this.renderableOwners.length;
-      if (oldSize !== newSize && newSize === 1) {
+      owners.add(owner);
+      if (owners.size === 1) {
         (this.renderable as boolean) = true;
         this.onChangeIsRenderable?.(true);
         this.load();
       }
     } else {
-      if (hasOwnerIndex !== -1) {
-        this.renderableOwners.splice(hasOwnerIndex, 1);
+      if (owners.delete(owner) === false) {
+        return;
       }
 
-      const newSize = this.renderableOwners.length;
-      if (oldSize !== newSize && newSize === 0) {
+      if (owners.size === 0) {
         (this.renderable as boolean) = false;
         this.onChangeIsRenderable?.(false);
 

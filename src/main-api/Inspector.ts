@@ -1104,7 +1104,7 @@ export class Inspector {
     // Update renderable owners count
     div.setAttribute(
       'data-texture-owners',
-      String(texture.renderableOwners.length),
+      String(texture.renderableOwners.size),
     );
 
     // Update retry count

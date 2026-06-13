@@ -79,7 +79,7 @@ export class SubTexture extends Texture {
     // Resolve parent texture from cache or fallback to provided texture
     this.parentTexture = txManager.resolveParentTexture(this.props.texture);
 
-    if (this.renderableOwners.length > 0) {
+    if (this.renderableOwners.size > 0) {
       this.parentTexture.setRenderableOwner(this.subtextureId, true);
     }
 
