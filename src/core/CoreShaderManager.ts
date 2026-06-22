@@ -103,8 +103,21 @@ export class CoreShaderManager {
      * if shaderProgram was not found create a new one
      */
     if (shProgram === undefined) {
-      shProgram = this.stage.renderer.createShaderProgram(shType, props)!;
-      this.shCache.set(shaderKey, shProgram);
+      try {
+        shProgram = this.stage.renderer.createShaderProgram(shType, props)!;
+        this.shCache.set(shaderKey, shProgram);
+      } catch (e) {
+        // The renderer trips `isContextLost` when shader creation fails due to
+        // a lost GL context. That is unrecoverable in-place (the consumer
+        // reloads on the `contextLost` event), so fall back to the default
+        // shader node instead of letting the throw propagate through the app's
+        // reactive layer. A genuine GLSL compile error (context not lost) is a
+        // real bug and is rethrown so it surfaces loudly.
+        if (this.stage.isContextLost === true) {
+          return this.stage.defShaderNode;
+        }
+        throw e;
+      }
     }
 
     return this.stage.renderer.createShaderNode(

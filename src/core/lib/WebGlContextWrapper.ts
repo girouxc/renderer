@@ -1192,6 +1192,22 @@ export class WebGlContextWrapper {
 
   /**
    * ```
+   * gl.isContextLost();
+   * ```
+   *
+   * @remarks
+   * Reports the current lost state directly and is not consumed like
+   * `getError()` (whose `CONTEXT_LOST_WEBGL` flag is cleared on first read).
+   * Use this to detect a lost context after a GL call has already failed.
+   *
+   * @returns
+   */
+  isContextLost() {
+    return this.gl.isContextLost();
+  }
+
+  /**
+   * ```
    * gl.getAttribLocation(program, name);
    * ```
    *

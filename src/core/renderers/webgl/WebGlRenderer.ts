@@ -385,7 +385,19 @@ export class WebGlRenderer extends CoreRenderer {
     shaderType: WebGlShaderType,
     props: Record<string, unknown>,
   ): WebGlShaderProgram {
-    return new WebGlShaderProgram(this, shaderType, props);
+    try {
+      return new WebGlShaderProgram(this, shaderType, props);
+    } catch (e) {
+      // A lost GL context makes shader creation/compilation fail synchronously
+      // (gl.createShader returns null -> CONTEXT_LOST_WEBGL). This can run on
+      // the app's reactive stack before the async `webglcontextlost` event is
+      // processed, so trip the flag here too. setContextLost() is idempotent
+      // and emits `contextLost` for consumers (recovery is an app reload).
+      if (this.glw.isContextLost() === true) {
+        this.stage.setContextLost();
+      }
+      throw e;
+    }
   }
 
   createShaderNode(
